@@ -38,10 +38,31 @@ class BhashaAccessibilityService : AccessibilityService() {
     fun getTextFromFocusedField(): String? {
         val rootNode = rootInActiveWindow ?: return null
         val focusedNode = findFocusedEditText(rootNode)
-        val text = focusedNode?.text?.toString()
+        val text = focusedNode?.let { typedTextOf(it) }
         focusedNode?.recycle()
         rootNode.recycle()
         return text
+    }
+
+    /**
+     * What the user actually typed, with placeholder text filtered out.
+     *
+     * An empty field reports its hint through `getText()` - WhatsApp's composer
+     * returns "Message" - so reading the node naively makes the placeholder look
+     * like real content. Dictation then appends to it ("Message ನಾಳೆ ಬರುತ್ತೇನೆ")
+     * and tap-to-translate happily translates the word "Message".
+     *
+     * `isShowingHintText` is the authoritative signal and exists from API 26.
+     * Below that there is no way to tell a hint from typed text, so the raw
+     * value stands rather than risking dropping something the user wrote.
+     */
+    private fun typedTextOf(node: AccessibilityNodeInfo): String {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+            node.isShowingHintText
+        ) {
+            return ""
+        }
+        return node.text?.toString().orEmpty()
     }
 
     /**
@@ -57,7 +78,7 @@ class BhashaAccessibilityService : AccessibilityService() {
             arguments.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
             arguments.putInt(
                 AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT,
-                focusedNode.text?.length ?: 0
+                typedTextOf(focusedNode).length
             )
             focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, arguments)
 
@@ -90,7 +111,7 @@ class BhashaAccessibilityService : AccessibilityService() {
         val focusedNode = findFocusedEditText(rootNode)
 
         val success = if (focusedNode != null) {
-            val existing = focusedNode.text?.toString().orEmpty()
+            val existing = typedTextOf(focusedNode)
             val combined = if (existing.isBlank()) {
                 newText
             } else {
