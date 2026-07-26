@@ -12,6 +12,13 @@ class BhashaAccessibilityService : AccessibilityService() {
         fun getInstance(): BhashaAccessibilityService? = instance
 
         fun isServiceEnabled(): Boolean = instance != null
+
+        /** The actions an editable view offers only for text it actually holds. */
+        private val TEXT_NAVIGATION_ACTIONS = setOf(
+            AccessibilityNodeInfo.ACTION_SET_SELECTION,
+            AccessibilityNodeInfo.ACTION_NEXT_AT_MOVEMENT_GRANULARITY,
+            AccessibilityNodeInfo.ACTION_PREVIOUS_AT_MOVEMENT_GRANULARITY
+        )
     }
 
     override fun onServiceConnected() {
@@ -58,13 +65,21 @@ class BhashaAccessibilityService : AccessibilityService() {
      * against the labels the node itself publishes - `hintText` and
      * `contentDescription`.
      *
+     * Neither holds for WhatsApp, whose composer was read from the device:
+     *
+     *     id=com.whatsapp:id/entry text=[Message] showingHint=false
+     *     hintText=[null] contentDesc=[null] sel=-1..-1
+     *
+     * Nothing it publishes says "placeholder". What gives it away is what it
+     * cannot do - see [offersAWayThroughItsText].
+     *
      * The cost of the equality checks is that typing the placeholder word and
      * nothing else ("Message") reads as an empty field, so a dictated phrase
      * replaces it instead of being appended. That is a visible, one-word,
      * recoverable loss in a case that essentially does not occur, weighed
      * against a placeholder that leaks into every voice message.
      *
-     * All three signals arrived in API 26. Below that Android offers no way to
+     * The hint signals arrived in API 26. Below that Android offers no way to
      * tell a hint from typed text, so the raw value stands rather than risking
      * dropping something the parent wrote.
      */
@@ -76,8 +91,35 @@ class BhashaAccessibilityService : AccessibilityService() {
         if (node.isShowingHintText) return ""
         if (looksLikePlaceholder(raw, node.hintText)) return ""
         if (looksLikePlaceholder(raw, node.contentDescription)) return ""
+        if (!offersAWayThroughItsText(node)) return ""
 
         return raw
+    }
+
+    /**
+     * Whether the field can move a caret through the text it reports, which is
+     * true only of text it really holds.
+     *
+     * `TextView` publishes these three actions, and a non-zero movement
+     * granularity, from its actual buffer, while `getText()` falls back to the
+     * hint when that buffer is empty. So the two disagree exactly when the
+     * reported text is a placeholder, and WhatsApp's empty composer claims
+     * seven characters while offering no way to step through them:
+     *
+     *     actions=[ACTION_CLEAR_FOCUS, ACTION_SELECT, ACTION_CLEAR_SELECTION,
+     *              ACTION_CLICK, ACTION_LONG_CLICK, ACTION_ACCESSIBILITY_FOCUS,
+     *              ACTION_PASTE, ACTION_SET_TEXT, ACTION_SHOW_ON_SCREEN,
+     *              ACTION_IME_ENTER]
+     *
+     * A field really holding text has to offer at least one of these, or a
+     * screen reader could not read it out, so a field that offers none of them
+     * is empty behind its label. That is an inference from how editable views
+     * describe themselves rather than a documented contract, which is why it
+     * runs last, after the signals a field can state outright.
+     */
+    private fun offersAWayThroughItsText(node: AccessibilityNodeInfo): Boolean {
+        if (node.movementGranularities != 0) return true
+        return node.actionList.any { it.id in TEXT_NAVIGATION_ACTIONS }
     }
 
     /**
