@@ -31,6 +31,11 @@ class OverlayService : Service() {
     private var processingBubble: View? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /** The language chip that rides under the bubble. */
+    private var languageChip: TextView? = null
+    private var chipParams: WindowManager.LayoutParams? = null
+    private var bubbleParams: WindowManager.LayoutParams? = null
+
     /** Double-tap detection for screen translation. */
     private var lastTapAt = 0L
     private var pendingSingleTap: Runnable? = null
@@ -58,25 +63,35 @@ class OverlayService : Service() {
         }
 
         fun setCaptureUiHidden(hidden: Boolean) {
-            instance?.mainHandler?.post {
-                instance?.floatingView?.visibility =
-                    if (hidden) View.INVISIBLE else View.VISIBLE
-                if (hidden) {
-                    instance?.hideProcessingBubble()
-                }
+            instance?.mainHandler?.post { instance?.applyCaptureUiHidden(hidden) }
+        }
+
+        /** Redraws the chip after the language pair changes anywhere. */
+        fun refreshLanguageChip() {
+            instance?.mainHandler?.post { instance?.updateLanguageChip() }
+        }
+
+        /** Confirms a pick made from the panel, over the app they are in. */
+        fun announceLanguage() {
+            val service = instance ?: return
+            service.mainHandler.post {
+                ScreenTranslationOverlayController.showMessage(
+                    service,
+                    service.languageSummary(),
+                )
             }
         }
 
         fun onScreenCaptureReady(jpegBase64: String) {
             instance?.mainHandler?.post {
-                instance?.floatingView?.visibility = View.VISIBLE
+                instance?.applyCaptureUiHidden(false)
                 instance?.translateCapturedScreen(jpegBase64)
             }
         }
 
         fun onScreenCaptureError(message: String) {
             instance?.mainHandler?.post {
-                instance?.floatingView?.visibility = View.VISIBLE
+                instance?.applyCaptureUiHidden(false)
                 instance?.hideProcessingBubble()
                 if (message != "Screen capture was cancelled.") {
                     ScreenTranslationOverlayController.showMessage(
@@ -94,6 +109,7 @@ class OverlayService : Service() {
         createNotificationChannel()
         startAsOverlayService()
         createFloatingButton()
+        createLanguageChip()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -201,6 +217,7 @@ class OverlayService : Service() {
             x = 20
             y = 200
         }
+        bubbleParams = params
 
         // Make draggable with dismiss zone
         var initialX = 0
@@ -249,6 +266,7 @@ class OverlayService : Service() {
                     }
 
                     windowManager?.updateViewLayout(button, params)
+                    positionLanguageChip()
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -297,6 +315,140 @@ class OverlayService : Service() {
     private fun idleButtonLabel(): String = when (getCurrentActionType()) {
         "grammar" -> "G"
         else -> "T"
+    }
+
+    // ---------------------------------------------------------------------
+    // Language chip
+    // ---------------------------------------------------------------------
+
+    /**
+     * A second, smaller view pinned under the bubble.
+     *
+     * It carries its own touch target because the bubble's tap, double tap and
+     * long press are already the three actions; there is no fourth gesture
+     * left to spend on switching language. Being always visible also answers
+     * the question that used to send parents into Settings in the first place,
+     * which is simply *what language am I on right now*.
+     */
+    private fun createLanguageChip() {
+        val density = resources.displayMetrics.density
+
+        val chip = TextView(this).apply {
+            text = languageChipLabel()
+            textSize = 11f
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            includeFontPadding = false
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 12 * density
+                setColor(Color.parseColor("#2D3748"))
+            }
+            elevation = 10f
+            setPadding(
+                (8 * density).toInt(),
+                (4 * density).toInt(),
+                (8 * density).toInt(),
+                (4 * density).toInt(),
+            )
+            contentDescription = "Change translation language"
+            setOnClickListener { LanguagePanelController.toggle(this@OverlayService) }
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+        }
+
+        chipParams = params
+        windowManager?.addView(chip, params)
+        languageChip = chip
+        positionLanguageChip()
+    }
+
+    /**
+     * Keeps the chip under the bubble, flipping above it when the parent has
+     * dragged the bubble far enough down that there is no room below.
+     */
+    private fun positionLanguageChip() {
+        val chip = languageChip ?: return
+        val params = chipParams ?: return
+        val bubble = bubbleParams ?: return
+        val density = resources.displayMetrics.density
+        val bubbleSize = (56 * density).toInt()
+        val chipHeight = (22 * density).toInt()
+        val gap = (6 * density).toInt()
+        val screenHeight = resources.displayMetrics.heightPixels
+
+        val below = bubble.y + bubbleSize + gap
+        params.x = bubble.x
+        params.y = if (below + chipHeight > screenHeight) {
+            (bubble.y - chipHeight - gap).coerceAtLeast(0)
+        } else {
+            below
+        }
+
+        try {
+            windowManager?.updateViewLayout(chip, params)
+        } catch (_: IllegalArgumentException) {
+            // The chip was already torn down.
+        }
+    }
+
+    private fun updateLanguageChip() {
+        languageChip?.text = languageChipLabel()
+        positionLanguageChip()
+    }
+
+    /**
+     * Takes every piece of Bhasha's own UI off screen for the duration of a
+     * screen capture, so the screenshot is of the app underneath and not of us.
+     */
+    private fun applyCaptureUiHidden(hidden: Boolean) {
+        val visibility = if (hidden) View.INVISIBLE else View.VISIBLE
+        floatingView?.visibility = visibility
+        languageChip?.visibility = visibility
+        if (hidden) {
+            LanguagePanelController.dismiss()
+            hideProcessingBubble()
+        }
+    }
+
+    /** `KN⇄EN` while auto-flip is on, `→EN` when the direction is fixed. */
+    private fun languageChipLabel(): String {
+        val pair = BhashaChannel.languagePair()
+        if (pair.isUnset) return "··"
+        return if (pair.autoFlip) {
+            "${shortLabelFor(pair.sourceName)}⇄${shortLabelFor(pair.targetName)}"
+        } else {
+            "→${shortLabelFor(pair.targetName)}"
+        }
+    }
+
+    private fun shortLabelFor(name: String): String =
+        BhashaChannel.languageCatalog()
+            .firstOrNull { it.name.equals(name, ignoreCase = true) }
+            ?.shortLabel
+            ?: name.take(2).uppercase()
+
+    /** Parent-facing sentence for the pair, shown after a pick. */
+    private fun languageSummary(): String {
+        val pair = BhashaChannel.languagePair()
+        if (pair.isUnset) return "Language updated."
+        return if (pair.autoFlip) {
+            "${pair.sourceName} ⇄ ${pair.targetName} · Bhasha picks the direction"
+        } else {
+            "Translating into ${pair.targetName}"
+        }
     }
 
     private fun createCircleBackground(): GradientDrawable {
@@ -385,6 +537,9 @@ class OverlayService : Service() {
             text = "●"
             background = createRecordingBackground()
         }
+        // Nothing but the recording state should be competing for attention
+        // while they are speaking.
+        languageChip?.visibility = View.GONE
         showStatus("Listening… speak now", spinner = false)
     }
 
@@ -454,6 +609,8 @@ class OverlayService : Service() {
             text = idleButtonLabel()
             background = createCircleBackground()
         }
+        languageChip?.visibility = View.VISIBLE
+        updateLanguageChip()
     }
 
     private fun hasMicPermission(): Boolean =
@@ -663,6 +820,13 @@ class OverlayService : Service() {
             windowManager?.removeView(it)
         }
         floatingView = null
+        languageChip?.let {
+            windowManager?.removeView(it)
+        }
+        languageChip = null
+        chipParams = null
+        bubbleParams = null
+        LanguagePanelController.dismiss()
         hideStatus()
     }
 
@@ -675,6 +839,13 @@ class OverlayService : Service() {
      * double-tap window closes, so a double tap is not also seen as a tap.
      */
     private fun handleTap() {
+        // With the picker open the bubble is a way out of it, not a way to
+        // start an action the parent has not chosen a language for yet.
+        if (LanguagePanelController.isVisible()) {
+            LanguagePanelController.dismiss()
+            return
+        }
+
         val timeout = ViewConfiguration.getDoubleTapTimeout().toLong()
         val now = SystemClock.uptimeMillis()
         val pending = pendingSingleTap

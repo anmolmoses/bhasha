@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants/languages.dart';
+import '../services/platform_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
@@ -50,6 +51,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await _storage.saveSourceLanguage(_sourceLang);
     await _storage.saveTargetLanguage(_targetLang);
     await _storage.setFirstTimeSetupComplete();
+
+    // The bubble's chip reads native preferences, so the pair chosen here has
+    // to reach them before the parent ever leaves for another app.
+    await PlatformService().syncLanguageSettings(
+      sourceLanguage: _sourceLang,
+      targetLanguage: _targetLang,
+      autoFlip: _storage.getAutoFlip(),
+    );
 
     if (mounted) {
       setState(() => _isSaving = false);

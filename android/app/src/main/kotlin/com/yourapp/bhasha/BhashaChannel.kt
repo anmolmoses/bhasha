@@ -33,6 +33,10 @@ object BhashaChannel {
     private const val NATIVE_PREFS = "bhasha_native_preferences"
     private const val SCREEN_TRANSLATION_ENABLED = "screen_translation_enabled"
     private const val CONTEXTUAL_ENABLED = "whatsapp_contextual_enabled"
+    private const val LANGUAGE_CATALOG = "language_catalog"
+    private const val LANGUAGE_SOURCE = "language_source"
+    private const val LANGUAGE_TARGET = "language_target"
+    private const val LANGUAGE_AUTO_FLIP = "language_auto_flip"
 
 
     const val CHANNEL = "com.yourapp.bhasha/native"
@@ -98,6 +102,11 @@ object BhashaChannel {
             return
         }
 
+        // The pair rides along with every request: it is how a choice made from
+        // the overlay chip reaches Dart, which has no other way to hear about
+        // it while the app itself is not running.
+        val pair = languagePair()
+
         mainHandler.post {
             target.invokeMethod(
                 "processOverlayAction",
@@ -107,6 +116,9 @@ object BhashaChannel {
                     "audioPath" to audioPath,
                     "imageBase64" to imageBase64,
                     "blocks" to blocks,
+                    "sourceLanguage" to pair.sourceName.ifEmpty { null },
+                    "targetLanguage" to pair.targetName.ifEmpty { null },
+                    "autoFlip" to pair.autoFlip,
                 ),
                 object : MethodChannel.Result {
                     override fun success(result: Any?) {
@@ -168,6 +180,79 @@ object BhashaChannel {
     private fun setScreenTranslationEnabled(enabled: Boolean): Boolean {
         prefs()?.edit()?.putBoolean(SCREEN_TRANSLATION_ENABLED, enabled)?.apply()
             ?: return false
+        return true
+    }
+
+    // -----------------------------------------------------------------------
+    // Language pair, owned by the bubble while the parent is in another app
+    // -----------------------------------------------------------------------
+
+    /**
+     * The languages the overlay can offer, pushed down from Dart because
+     * [Languages] lives there and duplicating 23 entries in Kotlin would rot.
+     *
+     * Empty until the app has run once, which cannot happen before the bubble
+     * exists: only the app can start it.
+     */
+    fun languageCatalog(): List<LanguageOption> =
+        prefs()?.getString(LANGUAGE_CATALOG, null)
+            ?.lineSequence()
+            ?.mapNotNull { line ->
+                val parts = line.split('|')
+                if (parts.size < 3) return@mapNotNull null
+                LanguageOption(
+                    code = parts[0],
+                    name = parts[1],
+                    shortLabel = parts[2],
+                )
+            }
+            ?.toList()
+            .orEmpty()
+
+    fun languagePair(): LanguagePair {
+        val prefs = prefs()
+        return LanguagePair(
+            sourceName = prefs?.getString(LANGUAGE_SOURCE, null).orEmpty(),
+            targetName = prefs?.getString(LANGUAGE_TARGET, null).orEmpty(),
+            autoFlip = prefs?.getBoolean(LANGUAGE_AUTO_FLIP, true) ?: true,
+        )
+    }
+
+    /**
+     * Records a choice made from the overlay chip. Dart is not told directly:
+     * it may have no isolate alive right now, so the value rides along with the
+     * next [processOverlayAction] instead, where it cannot be lost.
+     */
+    fun setTargetLanguage(name: String) {
+        prefs()?.edit()?.putString(LANGUAGE_TARGET, name)?.apply()
+    }
+
+    fun setSourceLanguage(name: String) {
+        prefs()?.edit()?.putString(LANGUAGE_SOURCE, name)?.apply()
+    }
+
+    fun setAutoFlip(enabled: Boolean) {
+        prefs()?.edit()?.putBoolean(LANGUAGE_AUTO_FLIP, enabled)?.apply()
+    }
+
+    private fun syncLanguageSettings(
+        call: io.flutter.plugin.common.MethodCall,
+    ): Boolean {
+        val editor = prefs()?.edit() ?: return false
+        call.argument<List<String>>("catalog")?.let { catalog ->
+            editor.putString(LANGUAGE_CATALOG, catalog.joinToString("\n"))
+        }
+        call.argument<String>("sourceLanguage")?.let {
+            editor.putString(LANGUAGE_SOURCE, it)
+        }
+        call.argument<String>("targetLanguage")?.let {
+            editor.putString(LANGUAGE_TARGET, it)
+        }
+        call.argument<Boolean>("autoFlip")?.let {
+            editor.putBoolean(LANGUAGE_AUTO_FLIP, it)
+        }
+        editor.apply()
+        OverlayService.refreshLanguageChip()
         return true
     }
 
@@ -235,6 +320,7 @@ object BhashaChannel {
                     call.argument<Boolean>("enabled") ?: false
                 )
             )
+            "syncLanguageSettings" -> result.success(syncLanguageSettings(call))
             "updateFloatingActionType" -> {
                 OverlayService.updateActionType(
                     call.argument<String>("actionType") ?: "translate"

@@ -21,6 +21,17 @@ Your app now works with **just ONE tap** - no more copying, pasting, or multiple
 3. **Tap the blue "T" button** (floating on your screen)
 4. **Done!** Your Kannada text automatically becomes English!
 
+Type in English instead, and the same button gives you Kannada. You never have
+to tell it which way round — it works that out from what you typed.
+
+## Want a different language?
+
+Look at the small dark chip just under the blue button. It says something like
+**KN⇄EN**. That is your language pair.
+
+**Tap the chip** and a list opens right there, on top of WhatsApp. Pick the
+language you want and carry on. You never have to leave the app you are in.
+
 ## That's It!
 
 ### Before (Old Way - Too Hard!)
