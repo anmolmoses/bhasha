@@ -1,7 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../constants/languages.dart';
 import '../models/app_mode.dart';
-import '../models/x_reply_style.dart';
 
 class StorageService {
   static final StorageService _instance = StorageService._internal();
@@ -12,7 +12,8 @@ class StorageService {
   SharedPreferences? _prefs;
 
   // Keys
-  static const String _apiKeyKey = 'openai_api_key';
+  static const String _sarvamApiKeyKey = 'sarvam_api_key';
+  static const String _legacyOpenAiKeyKey = 'openai_api_key';
   static const String _appModeKey = 'app_mode';
   static const String _sourceLangKey = 'source_language';
   static const String _targetLangKey = 'target_language';
@@ -20,31 +21,40 @@ class StorageService {
   static const String _firstTimeSetupKey = 'first_time_setup';
   static const String _autoDetectKey = 'auto_detect_language';
   static const String _floatingActionKey = 'floating_action_type';
-  static const String _xReplyToneKey = 'x_reply_tone';
-  static const String _xReplyLengthKey = 'x_reply_length';
-  static const String _xReplyCountKey = 'x_reply_count';
-  static const String _xReplyEmojisKey = 'x_reply_emojis';
-  static const String _xReplyInstructionsKey = 'x_reply_instructions';
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    await _purgeLegacyOpenAiKey();
   }
 
-  // API Key (Secure Storage)
-  Future<void> saveApiKey(String apiKey) async {
-    await _secureStorage.write(key: _apiKeyKey, value: apiKey);
+  /// Bhasha no longer talks to OpenAI. Any key left over from an earlier
+  /// install is deleted rather than left sitting in the keystore.
+  Future<void> _purgeLegacyOpenAiKey() async {
+    try {
+      final legacy = await _secureStorage.read(key: _legacyOpenAiKeyKey);
+      if (legacy != null) {
+        await _secureStorage.delete(key: _legacyOpenAiKeyKey);
+      }
+    } catch (_) {
+      // A keystore read failure must never block app startup.
+    }
   }
 
-  Future<String?> getApiKey() async {
-    return await _secureStorage.read(key: _apiKeyKey);
+  // Sarvam API Key (Secure Storage)
+  Future<void> saveSarvamApiKey(String apiKey) async {
+    await _secureStorage.write(key: _sarvamApiKeyKey, value: apiKey.trim());
   }
 
-  Future<void> deleteApiKey() async {
-    await _secureStorage.delete(key: _apiKeyKey);
+  Future<String?> getSarvamApiKey() async {
+    return await _secureStorage.read(key: _sarvamApiKeyKey);
   }
 
-  Future<bool> hasApiKey() async {
-    final key = await getApiKey();
+  Future<void> deleteSarvamApiKey() async {
+    await _secureStorage.delete(key: _sarvamApiKeyKey);
+  }
+
+  Future<bool> hasSarvamApiKey() async {
+    final key = await getSarvamApiKey();
     return key != null && key.isNotEmpty;
   }
 
@@ -64,8 +74,12 @@ class StorageService {
     await _prefs?.setString(_sourceLangKey, language);
   }
 
+  /// Falls back to Kannada when the stored value is a language Sarvam does not
+  /// support (possible after upgrading from the OpenAI build, which offered 35).
   String getSourceLanguage() {
-    return _prefs?.getString(_sourceLangKey) ?? 'Kannada';
+    final stored = _prefs?.getString(_sourceLangKey);
+    if (stored != null && Languages.isSupported(stored)) return stored;
+    return Languages.defaultSourceName;
   }
 
   // Target Language
@@ -74,7 +88,9 @@ class StorageService {
   }
 
   String getTargetLanguage() {
-    return _prefs?.getString(_targetLangKey) ?? 'English';
+    final stored = _prefs?.getString(_targetLangKey);
+    if (stored != null && Languages.isSupported(stored)) return stored;
+    return Languages.defaultTargetName;
   }
 
   // Grammar Check Enabled
@@ -104,64 +120,17 @@ class StorageService {
     return _prefs?.getBool(_firstTimeSetupKey) ?? false;
   }
 
-  // Floating Action Type (translate, grammar, or x_replies)
+  // Floating Action Type (translate or grammar)
   Future<void> saveFloatingActionType(String actionType) async {
     await _prefs?.setString(_floatingActionKey, actionType);
   }
 
   String getFloatingActionType() {
-    return _prefs?.getString(_floatingActionKey) ?? 'translate';
-  }
-
-  // X Reply Style
-  Future<void> saveXReplyTone(String tone) async {
-    await _prefs?.setString(_xReplyToneKey, tone);
-  }
-
-  String getXReplyTone() {
-    return _prefs?.getString(_xReplyToneKey) ?? 'Warm';
-  }
-
-  Future<void> saveXReplyLength(String length) async {
-    await _prefs?.setString(_xReplyLengthKey, length);
-  }
-
-  String getXReplyLength() {
-    return _prefs?.getString(_xReplyLengthKey) ?? 'Short';
-  }
-
-  Future<void> saveXReplyCount(int count) async {
-    await _prefs?.setInt(_xReplyCountKey, count);
-  }
-
-  int getXReplyCount() {
-    return _prefs?.getInt(_xReplyCountKey) ?? 4;
-  }
-
-  Future<void> saveXReplyIncludeEmojis(bool include) async {
-    await _prefs?.setBool(_xReplyEmojisKey, include);
-  }
-
-  bool getXReplyIncludeEmojis() {
-    return _prefs?.getBool(_xReplyEmojisKey) ?? false;
-  }
-
-  Future<void> saveXReplyInstructions(String instructions) async {
-    await _prefs?.setString(_xReplyInstructionsKey, instructions);
-  }
-
-  String getXReplyInstructions() {
-    return _prefs?.getString(_xReplyInstructionsKey) ?? '';
-  }
-
-  XReplyStyle getXReplyStyle() {
-    return XReplyStyle(
-      tone: getXReplyTone(),
-      length: getXReplyLength(),
-      replyCount: getXReplyCount(),
-      includeEmojis: getXReplyIncludeEmojis(),
-      customInstructions: getXReplyInstructions(),
-    );
+    final stored = _prefs?.getString(_floatingActionKey);
+    // 'x_replies' was removed with the vision feature; map it back to the
+    // default so an upgraded install does not start on a dead action.
+    if (stored == 'translate' || stored == 'grammar') return stored!;
+    return 'translate';
   }
 
   // Clear all data

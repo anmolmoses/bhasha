@@ -112,7 +112,10 @@ class LanguagePicker extends StatelessWidget {
                         ? Center(
                             child: Text(
                               'No matches found',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
                                     color: AppColors.textSecondary,
                                   ),
                             ),
@@ -130,7 +133,8 @@ class LanguagePicker extends StatelessWidget {
                                 onTap: () => Navigator.pop(context, language),
                               );
                             },
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemCount: filtered.length,
                           ),
                   ),

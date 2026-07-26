@@ -1,9 +1,16 @@
 import 'package:flutter/services.dart';
 
-import 'openai_service.dart';
+import '../constants/languages.dart';
+import '../models/sarvam_error.dart';
 import 'platform_service.dart';
+import 'sarvam_service.dart';
 import 'storage_service.dart';
 
+/// Handles bubble actions coming from the native overlay.
+///
+/// Every request is served by Sarvam. There is no fallback provider: if the
+/// Sarvam key is missing or rejected, the action fails with a message telling
+/// the parent what to fix.
 class OverlayRequestHandler {
   static final OverlayRequestHandler _instance =
       OverlayRequestHandler._internal();
@@ -12,9 +19,14 @@ class OverlayRequestHandler {
 
   final _platform = PlatformService();
   final _storage = StorageService();
-  final _openai = OpenAIService();
+  SarvamService _sarvam = SarvamService.shared;
 
   bool _initialized = false;
+
+  /// Test seam: swaps in a client backed by a mock transport.
+  void overrideServiceForTesting(SarvamService service) {
+    _sarvam = service;
+  }
 
   void init() {
     if (_initialized) return;
@@ -29,7 +41,6 @@ class OverlayRequestHandler {
     final arguments = Map<String, dynamic>.from(call.arguments as Map);
     final action = arguments['action']?.toString();
     final text = (arguments['text'] ?? '').toString();
-    final screenshotBase64 = (arguments['screenshotBase64'] ?? '').toString();
 
     if (action == null) {
       throw PlatformException(
@@ -40,114 +51,113 @@ class OverlayRequestHandler {
 
     await _ensureApiKey();
 
-    switch (action) {
-      case 'translate':
-        if (text.trim().isEmpty) {
+    try {
+      switch (action) {
+        case 'translate':
+          _requireText(text);
+          return await _handleTranslate(text);
+        case 'grammar':
+          _requireText(text);
+          return await _handleGrammar(text);
+        default:
           throw PlatformException(
-            code: 'invalid_arguments',
-            message: 'Text is required',
+            code: 'unknown_action',
+            message: 'Unsupported action: $action',
           );
-        }
-        return _handleTranslate(text);
-      case 'grammar':
-        if (text.trim().isEmpty) {
-          throw PlatformException(
-            code: 'invalid_arguments',
-            message: 'Text is required',
-          );
-        }
-        return _handleGrammar(text);
-      case 'x_replies':
-        if (screenshotBase64.trim().isEmpty) {
-          throw PlatformException(
-            code: 'invalid_arguments',
-            message: 'Screenshot is required for X replies',
-          );
-        }
-        return _handleXReplies(screenshotBase64);
-      default:
-        throw PlatformException(
-          code: 'unknown_action',
-          message: 'Unsupported action: $action',
-        );
+      }
+    } on SarvamException catch (e) {
+      // Surface the parent-facing message, never the raw detail.
+      throw PlatformException(code: e.kind.name, message: e.parentMessage);
+    }
+  }
+
+  void _requireText(String text) {
+    if (text.trim().isEmpty) {
+      throw PlatformException(
+        code: 'invalid_arguments',
+        message: 'Tap in a text field with some text first.',
+      );
     }
   }
 
   Future<Map<String, dynamic>> _handleTranslate(String text) async {
-    String sourceLang = _storage.getSourceLanguage();
-    final targetLang = _storage.getTargetLanguage();
+    final sourceName = _storage.getSourceLanguage();
+    final targetName = _storage.getTargetLanguage();
     final autoDetect = _storage.getAutoDetect();
 
+    final targetCode = Languages.codeFor(targetName);
+    if (targetCode == null) {
+      throw PlatformException(
+        code: 'unsupported_language',
+        message:
+            '$targetName is not supported. Pick another language in Settings.',
+      );
+    }
+
+    var sourceCode = Languages.codeFor(sourceName);
     if (autoDetect) {
       try {
-        sourceLang = await _openai.detectLanguage(text);
-      } catch (e) {
-        // Fall back silently if detection fails; keep stored language.
+        final detected = await _sarvam.identifyLanguage(text);
+        if (detected.languageCode != null) {
+          sourceCode = detected.languageCode;
+        }
+      } on SarvamException {
+        // Detection is best-effort; fall back to the saved language rather
+        // than failing the whole translation.
       }
     }
 
-    final result = await _openai.translate(
-      text: text,
-      sourceLang: sourceLang,
-      targetLang: targetLang,
+    // Mayura accepts `auto`, which is a better default than guessing wrong.
+    final resolvedSource = sourceCode ?? 'auto';
+
+    final translated = await _sarvam.translate(
+      input: text,
+      sourceLanguageCode: resolvedSource,
+      targetLanguageCode: targetCode,
     );
 
     return {
       'action': 'translate',
       'success': true,
-      'resultText': result.translatedText,
-      'originalText': result.originalText,
-      'sourceLang': result.sourceLang,
-      'targetLang': result.targetLang,
+      'resultText': translated,
+      'originalText': text,
+      'sourceLang': resolvedSource,
+      'targetLang': targetCode,
     };
   }
 
   Future<Map<String, dynamic>> _handleGrammar(String text) async {
     final language = _storage.getTargetLanguage();
-    final result = await _openai.checkGrammar(
-      text: text,
-      language: language,
+
+    final corrected = await _sarvam.chat(
+      messages: [
+        ChatMessage.system(
+          'You correct grammar, spelling, and punctuation in $language text.\n'
+          'Return ONLY the corrected text. No explanations, no quotes, no '
+          'commentary. If the text is already correct, return it unchanged.\n'
+          'Never change names, numbers, dates, times, or amounts.',
+        ),
+        ChatMessage.user(text),
+      ],
+      temperature: 0.0,
     );
 
     return {
       'action': 'grammar',
       'success': true,
-      'resultText': result.correctedText,
-      'originalText': result.originalText,
-      'language': result.language,
-      'hasCorrections': result.hasCorrections,
-    };
-  }
-
-  Future<Map<String, dynamic>> _handleXReplies(String screenshotBase64) async {
-    final style = _storage.getXReplyStyle();
-    final replies = await _openai.suggestXReplies(
-      screenshotBase64: screenshotBase64,
-      tone: style.tone,
-      length: style.length,
-      replyCount: style.replyCount,
-      includeEmojis: style.includeEmojis,
-      customInstructions: style.customInstructions,
-    );
-
-    return {
-      'action': 'x_replies',
-      'success': true,
-      'replies': replies,
-      'resultText': replies.join('\n'),
+      'resultText': corrected,
+      'originalText': text,
+      'language': language,
+      'hasCorrections': corrected.trim() != text.trim(),
     };
   }
 
   Future<void> _ensureApiKey() async {
-    if (_openai.hasValidApiKey) return;
-
-    final apiKey = await _storage.getApiKey();
-    if (apiKey == null || apiKey.isEmpty) {
-      throw PlatformException(
-        code: 'missing_api_key',
-        message: 'Add your API key in Bhasha settings before using overlay.',
-      );
-    }
-    _openai.setApiKey(apiKey);
+    if (await _storage.hasSarvamApiKey()) return;
+    throw PlatformException(
+      code: 'missing_api_key',
+      message:
+          'Add your Sarvam API key in Bhasha settings before using the bubble.',
+    );
   }
 }

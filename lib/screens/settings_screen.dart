@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../services/openai_service.dart';
 import '../services/platform_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
@@ -19,9 +18,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
   final _storage = StorageService();
-  final _openai = OpenAIService();
   final _platform = PlatformService();
-  final _xReplyInstructionsController = TextEditingController();
 
   late String _sourceLang;
   late String _targetLang;
@@ -31,10 +28,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _overlayPermissionGranted = false;
   bool _accessibilityEnabled = false;
   String _floatingActionType = 'translate';
-  String _xReplyTone = 'Warm';
-  String _xReplyLength = 'Short';
-  int _xReplyCount = 4;
-  bool _xReplyIncludeEmojis = false;
 
   @override
   void initState() {
@@ -55,7 +48,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _xReplyInstructionsController.dispose();
     super.dispose();
   }
 
@@ -76,12 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _targetLang = _storage.getTargetLanguage();
     _autoDetect = _storage.getAutoDetect();
     _floatingActionType = _storage.getFloatingActionType();
-    _xReplyTone = _storage.getXReplyTone();
-    _xReplyLength = _storage.getXReplyLength();
-    _xReplyCount = _storage.getXReplyCount();
-    _xReplyIncludeEmojis = _storage.getXReplyIncludeEmojis();
-    _xReplyInstructionsController.text = _storage.getXReplyInstructions();
-    _apiKey = await _storage.getApiKey();
+    _apiKey = await _storage.getSarvamApiKey();
 
     // Check permissions
     _overlayPermissionGranted = await _platform.checkOverlayPermission();
@@ -133,8 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ApiKeyInput(
                         initialApiKey: _apiKey,
                         onApiKeySaved: (apiKey) async {
-                          await _storage.saveApiKey(apiKey);
-                          _openai.setApiKey(apiKey);
+                          await _storage.saveSarvamApiKey(apiKey);
                           setState(() => _apiKey = apiKey);
                         },
                       ),
@@ -144,8 +130,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                       _buildLanguageSettings(),
                       const SizedBox(height: 24),
                       _buildGrammarCheckSection(),
-                      const SizedBox(height: 24),
-                      _buildXReplySettings(),
                       const SizedBox(height: 24),
                       _buildAboutSection(),
                       SizedBox(height: paddingBottom + 24),
@@ -470,119 +454,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  Widget _buildXReplySettings() {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SectionHeader(
-            headline: 'X Reply Suggestions',
-            subtitle:
-                'Customize replies generated from a screenshot of a post.',
-          ),
-          const SizedBox(height: 18),
-          DropdownButtonFormField<String>(
-            value: _xReplyTone,
-            decoration: const InputDecoration(
-              labelText: 'Reply tone',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'Warm', child: Text('Warm')),
-              DropdownMenuItem(value: 'Smart', child: Text('Smart')),
-              DropdownMenuItem(value: 'Funny', child: Text('Funny')),
-              DropdownMenuItem(
-                  value: 'Professional', child: Text('Professional')),
-              DropdownMenuItem(value: 'Contrarian', child: Text('Contrarian')),
-              DropdownMenuItem(value: 'Supportive', child: Text('Supportive')),
-            ],
-            onChanged: (value) async {
-              if (value == null) return;
-              await _storage.saveXReplyTone(value);
-              setState(() => _xReplyTone = value);
-            },
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _xReplyLength,
-            decoration: const InputDecoration(
-              labelText: 'Reply length',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(value: 'Very short', child: Text('Very short')),
-              DropdownMenuItem(value: 'Short', child: Text('Short')),
-              DropdownMenuItem(value: 'Medium', child: Text('Medium')),
-              DropdownMenuItem(value: 'Detailed', child: Text('Detailed')),
-            ],
-            onChanged: (value) async {
-              if (value == null) return;
-              await _storage.saveXReplyLength(value);
-              setState(() => _xReplyLength = value);
-            },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Reply options: $_xReplyCount',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ),
-              SizedBox(
-                width: 172,
-                child: Slider(
-                  min: 1,
-                  max: 6,
-                  divisions: 5,
-                  value: _xReplyCount.toDouble(),
-                  label: _xReplyCount.toString(),
-                  onChanged: (value) async {
-                    final count = value.round();
-                    await _storage.saveXReplyCount(count);
-                    setState(() => _xReplyCount = count);
-                  },
-                ),
-              ),
-            ],
-          ),
-          _buildSwitchRow(
-            title: 'Allow emojis',
-            subtitle: 'Use emojis only when they fit the reply style.',
-            value: _xReplyIncludeEmojis,
-            onChanged: (value) async {
-              await _storage.saveXReplyIncludeEmojis(value);
-              setState(() => _xReplyIncludeEmojis = value);
-            },
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _xReplyInstructionsController,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Custom style instructions',
-              hintText: 'Example: sound concise, curious, and never salesy',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (value) {
-              _storage.saveXReplyInstructions(value);
-            },
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Set One-Tap Action to "X Replies", open a post on X, then tap the bubble. Bhasha captures the visible screen and shows copyable reply options.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAboutSection() {
     return GlassCard(
       child: Column(
@@ -637,12 +508,6 @@ class _SettingsScreenState extends State<SettingsScreen>
             label: 'Grammar',
             icon: Icons.check_circle,
             gradient: AppGradients.successCard,
-          ),
-          _buildActionOption(
-            actionType: 'x_replies',
-            label: 'X Replies',
-            icon: Icons.chat_bubble_outline_rounded,
-            gradient: AppGradients.primaryButton,
           ),
         ],
       ),
