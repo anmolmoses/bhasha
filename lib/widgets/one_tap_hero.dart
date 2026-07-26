@@ -123,7 +123,9 @@ class OneTapHero extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                status.isFullyEnabled ? 'Active & Ready' : 'Quick Setup Required',
+                status.isFullyEnabled
+                    ? 'Active & Ready'
+                    : 'Quick Setup Required',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.white.withOpacity(0.85),
                       fontWeight: FontWeight.w500,

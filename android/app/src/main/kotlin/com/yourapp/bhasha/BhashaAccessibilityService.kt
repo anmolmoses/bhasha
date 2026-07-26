@@ -1,15 +1,8 @@
 package com.yourapp.bhasha
 
 import android.accessibilityservice.AccessibilityService
-import android.graphics.Bitmap
-import android.graphics.PixelFormat
-import android.os.Build
-import android.util.Base64
-import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import java.io.ByteArrayOutputStream
-import java.util.concurrent.Executors
 
 class BhashaAccessibilityService : AccessibilityService() {
 
@@ -37,53 +30,6 @@ class BhashaAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         instance = null
-    }
-
-    fun takeScreenshotBase64(callback: (String?, String?) -> Unit) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            callback(null, "Screenshot capture requires Android 11 or newer.")
-            return
-        }
-
-        val executor = Executors.newSingleThreadExecutor()
-        takeScreenshot(
-            Display.DEFAULT_DISPLAY,
-            executor,
-            object : TakeScreenshotCallback {
-                override fun onSuccess(screenshot: ScreenshotResult) {
-                    try {
-                        val hardwareBitmap = Bitmap.wrapHardwareBuffer(
-                            screenshot.hardwareBuffer,
-                            screenshot.colorSpace
-                        )
-                        if (hardwareBitmap == null) {
-                            callback(null, "Could not read screenshot.")
-                            return
-                        }
-
-                        val bitmap = hardwareBitmap.copy(Bitmap.Config.ARGB_8888, false)
-                        screenshot.hardwareBuffer.close()
-                        val output = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 88, output)
-                        bitmap.recycle()
-                        val encoded = Base64.encodeToString(
-                            output.toByteArray(),
-                            Base64.NO_WRAP
-                        )
-                        callback(encoded, null)
-                    } catch (e: Exception) {
-                        callback(null, e.message ?: "Screenshot capture failed.")
-                    } finally {
-                        executor.shutdown()
-                    }
-                }
-
-                override fun onFailure(errorCode: Int) {
-                    executor.shutdown()
-                    callback(null, "Screenshot capture failed with code $errorCode.")
-                }
-            }
-        )
     }
 
     /**

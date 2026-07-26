@@ -20,7 +20,6 @@ class MainActivity: FlutterActivity() {
         fun processOverlayAction(
             action: String,
             text: String,
-            screenshotBase64: String? = null,
             callback: (success: Boolean, data: Map<String, Any?>?, error: String?) -> Unit
         ) {
             val channel = methodChannelRef
@@ -34,8 +33,7 @@ class MainActivity: FlutterActivity() {
                     "processOverlayAction",
                     hashMapOf(
                         "action" to action,
-                        "text" to text,
-                        "screenshotBase64" to screenshotBase64
+                        "text" to text
                     ),
                     object : MethodChannel.Result {
                         override fun success(result: Any?) {

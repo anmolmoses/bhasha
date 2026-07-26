@@ -133,8 +133,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
-          foregroundColor:
-              MaterialStateProperty.all<Color>(AppColors.primary),
+          foregroundColor: MaterialStateProperty.all<Color>(AppColors.primary),
           textStyle: MaterialStateProperty.all<TextStyle>(
             const TextStyle(fontWeight: FontWeight.w600),
           ),

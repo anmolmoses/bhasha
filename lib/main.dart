@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/storage_service.dart';
-import 'services/openai_service.dart';
 import 'services/platform_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
@@ -48,7 +47,6 @@ class InitialScreen extends StatefulWidget {
 
 class _InitialScreenState extends State<InitialScreen> {
   final _storage = StorageService();
-  final _openai = OpenAIService();
 
   @override
   void initState() {
@@ -61,14 +59,9 @@ class _InitialScreenState extends State<InitialScreen> {
     await Future.delayed(const Duration(milliseconds: 500));
 
     final isFirstTime = !_storage.isFirstTimeSetupComplete();
-    final hasApiKey = await _storage.hasApiKey();
+    final hasApiKey = await _storage.hasSarvamApiKey();
 
     if (hasApiKey) {
-      final apiKey = await _storage.getApiKey();
-      if (apiKey != null) {
-        _openai.setApiKey(apiKey);
-      }
-
       // Initialize floating action type in overlay service
       final actionType = _storage.getFloatingActionType();
       await PlatformService().updateFloatingActionType(actionType);

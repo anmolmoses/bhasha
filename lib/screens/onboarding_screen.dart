@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../constants/languages.dart';
-import '../services/openai_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
@@ -21,7 +20,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final TextEditingController _apiKeyController = TextEditingController();
 
   final _storage = StorageService();
-  final _openai = OpenAIService();
 
   int _currentPage = 0;
   String _sourceLang = 'Kannada';
@@ -39,7 +37,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _completeOnboarding() async {
     if (_apiKeyController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please paste your OpenAI API key to continue.')),
+        const SnackBar(
+            content: Text('Please paste your Sarvam API key to continue.')),
       );
       return;
     }
@@ -47,11 +46,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isSaving = true);
 
     final apiKey = _apiKeyController.text.trim();
-    await _storage.saveApiKey(apiKey);
+    await _storage.saveSarvamApiKey(apiKey);
     await _storage.saveSourceLanguage(_sourceLang);
     await _storage.saveTargetLanguage(_targetLang);
     await _storage.setFirstTimeSetupComplete();
-    _openai.setApiKey(apiKey);
 
     if (mounted) {
       setState(() => _isSaving = false);
@@ -95,7 +93,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Row(
                   children: [
                     Text(
@@ -143,7 +142,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     const Spacer(),
                     PrimaryButton(
                       label: _currentPage == 2 ? 'Start exploring' : 'Next',
-                      icon: _currentPage == 2 ? Icons.rocket_launch : Icons.arrow_forward_rounded,
+                      icon: _currentPage == 2
+                          ? Icons.rocket_launch
+                          : Icons.arrow_forward_rounded,
                       expand: false,
                       onPressed: _isSaving ? null : _nextPage,
                     ),
@@ -168,9 +169,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           height: 6,
           width: _currentPage == index ? 26 : 8,
           decoration: BoxDecoration(
-            color: _currentPage == index
-                ? AppColors.primary
-                : AppColors.border,
+            color: _currentPage == index ? AppColors.primary : AppColors.border,
             borderRadius: BorderRadius.circular(12),
           ),
         ),
@@ -305,7 +304,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 const SectionHeader(
                   headline: 'Choose your languages',
-                  subtitle: 'We’ll use these as your default pair. You can always change them later.',
+                  subtitle:
+                      'We’ll use these as your default pair. You can always change them later.',
                 ),
                 const SizedBox(height: 24),
                 _buildLanguageSelectorTile(
@@ -384,8 +384,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SectionHeader(
-                  headline: 'Secure your OpenAI API key',
-                  subtitle: 'This stays encrypted on your device. We never send it anywhere else.',
+                  headline: 'Secure your Sarvam API key',
+                  subtitle:
+                      'This stays encrypted on your device. We never send it anywhere else.',
                 ),
                 const SizedBox(height: 24),
                 TextField(
@@ -393,7 +394,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   obscureText: _obscureApiKey,
                   decoration: InputDecoration(
                     labelText: 'API key',
-                    hintText: 'sk-...',
+                    hintText: 'sk_...',
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureApiKey
@@ -422,10 +423,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Tip: Visit platform.openai.com → API keys → Create new secret key. Paste it above.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                          'Tip: Visit dashboard.sarvam.ai → API keys → create a subscription key. Paste it above.',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
                         ),
                       ),
                     ],
@@ -494,7 +496,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ? Center(
                             child: Text(
                               'No matches found',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
                                     color: AppColors.textSecondary,
                                   ),
                             ),
@@ -514,7 +519,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 onTap: () => Navigator.pop(context, language),
                               );
                             },
-                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
                             itemCount: filtered.length,
                           ),
                   ),

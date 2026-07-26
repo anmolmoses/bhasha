@@ -13,15 +13,12 @@ import android.os.IBinder
 import android.os.Looper
 import android.view.*
 import android.widget.*
-import android.content.ClipData
-import android.content.ClipboardManager
 import androidx.core.app.NotificationCompat
 
 class OverlayService : Service() {
     private var windowManager: WindowManager? = null
     private var floatingView: View? = null
     private var processingBubble: View? = null
-    private var repliesPanel: View? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     companion object {
@@ -84,7 +81,6 @@ class OverlayService : Service() {
         // Create simple floating button with icon
         val buttonText = when (getCurrentActionType()) {
             "grammar" -> "G"
-            "x_replies" -> "R"
             else -> "T"
         }
         val button = Button(this).apply {
@@ -205,10 +201,6 @@ class OverlayService : Service() {
         }
 
         val actionType = getCurrentActionType()
-        if (actionType == "x_replies") {
-            performXReplySuggestion(accessibilityService)
-            return
-        }
 
         // Step 1: Get text from focused field
         val originalText = accessibilityService.getTextFromFocusedField()
@@ -247,42 +239,6 @@ class OverlayService : Service() {
                 } else {
                     val failMsg = if (actionType == "grammar") "Grammar check failed" else "Translation failed"
                     showToast("✗ ${error ?: failMsg}")
-                }
-            }
-        }
-    }
-
-    private fun performXReplySuggestion(accessibilityService: BhashaAccessibilityService) {
-        hideRepliesPanel()
-        showProcessingBubble("x_replies")
-        accessibilityService.takeScreenshotBase64 { screenshotBase64, screenshotError ->
-            if (screenshotBase64 == null) {
-                mainHandler.post {
-                    hideProcessingBubble()
-                    showToast("✗ ${screenshotError ?: "Could not capture screen"}")
-                }
-                return@takeScreenshotBase64
-            }
-
-            MainActivity.processOverlayAction(
-                action = "x_replies",
-                text = "",
-                screenshotBase64 = screenshotBase64
-            ) { success, data, error ->
-                mainHandler.post {
-                    hideProcessingBubble()
-                    if (success && data != null) {
-                        val replies = (data["replies"] as? List<*>)?.mapNotNull {
-                            it as? String
-                        }.orEmpty()
-                        if (replies.isNotEmpty()) {
-                            showRepliesPanel(replies)
-                        } else {
-                            showToast("✗ No replies generated")
-                        }
-                    } else {
-                        showToast("✗ ${error ?: "Reply suggestions failed"}")
-                    }
                 }
             }
         }
@@ -331,7 +287,6 @@ class OverlayService : Service() {
 
         val messageText = when (actionType) {
             "grammar" -> "Checking grammar..."
-            "x_replies" -> "Reading post..."
             else -> "Translating..."
         }
         val text = TextView(this).apply {
@@ -371,112 +326,11 @@ class OverlayService : Service() {
         }
     }
 
-    private fun showRepliesPanel(replies: List<String>) {
-        hideRepliesPanel()
-
-        val displayMetrics = resources.displayMetrics
-        val panelWidth = (displayMetrics.widthPixels * 0.9f).toInt()
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = 28f
-                setColor(Color.WHITE)
-                setStroke(2, Color.parseColor("#E2E8F0"))
-            }
-            elevation = 14f
-            setPadding(28, 24, 28, 20)
-        }
-
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val title = TextView(this).apply {
-            text = "Suggested replies"
-            setTextColor(Color.parseColor("#1A202C"))
-            textSize = 16f
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        val close = TextView(this).apply {
-            text = "Close"
-            setTextColor(Color.parseColor("#5E72E4"))
-            textSize = 14f
-            setPadding(18, 8, 0, 8)
-            setOnClickListener { hideRepliesPanel() }
-        }
-        header.addView(title)
-        header.addView(close)
-        panel.addView(header)
-
-        replies.forEachIndexed { index, reply ->
-            val item = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(0, 18, 0, 0)
-            }
-            val replyText = TextView(this).apply {
-                text = reply
-                setTextColor(Color.parseColor("#2D3748"))
-                textSize = 14f
-                setLineSpacing(2f, 1.05f)
-            }
-            val copyButton = Button(this).apply {
-                text = "Copy ${index + 1}"
-                textSize = 13f
-                setTextColor(Color.WHITE)
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = 18f
-                    setColor(Color.parseColor("#5E72E4"))
-                }
-                setOnClickListener {
-                    copyToClipboard(reply)
-                    showToast("Copied reply")
-                }
-            }
-            item.addView(replyText)
-            item.addView(copyButton)
-            panel.addView(item)
-        }
-
-        val params = WindowManager.LayoutParams(
-            panelWidth,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            x = 0
-            y = 48
-        }
-
-        windowManager?.addView(panel, params)
-        repliesPanel = panel
-    }
-
-    private fun hideRepliesPanel() {
-        repliesPanel?.let {
-            windowManager?.removeView(it)
-            repliesPanel = null
-        }
-    }
-
-    private fun copyToClipboard(text: String) {
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("Bhasha X reply", text))
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         floatingView?.let {
             windowManager?.removeView(it)
         }
         hideProcessingBubble()
-        hideRepliesPanel()
     }
 }

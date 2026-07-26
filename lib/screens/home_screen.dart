@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../constants/languages.dart';
-import '../services/openai_service.dart';
+import '../models/sarvam_error.dart';
 import '../services/platform_service.dart';
+import '../services/sarvam_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
@@ -21,7 +22,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _storage = StorageService();
-  final _openai = OpenAIService();
+  final _sarvam = SarvamService.shared;
   final _platform = PlatformService();
   final _inputController = TextEditingController();
 
@@ -57,10 +58,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadSettings() async {
     _sourceLang = _storage.getSourceLanguage();
     _targetLang = _storage.getTargetLanguage();
-    final apiKey = await _storage.getApiKey();
-    if (apiKey != null) {
-      _openai.setApiKey(apiKey);
-    }
     if (mounted) {
       setState(() {});
     }
@@ -157,21 +154,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _result = '';
     });
 
+    final sourceCode = Languages.codeFor(_sourceLang) ?? 'auto';
+    final targetCode = Languages.codeFor(_targetLang);
+    if (targetCode == null) {
+      setState(() => _isLoading = false);
+      _showMessage('$_targetLang is not supported. Pick another language.');
+      return;
+    }
+
     try {
-      final result = await _openai.translate(
-        text: _inputController.text,
-        sourceLang: _sourceLang,
-        targetLang: _targetLang,
+      final translated = await _sarvam.translate(
+        input: _inputController.text,
+        sourceLanguageCode: sourceCode,
+        targetLanguageCode: targetCode,
       );
       setState(() {
-        _result = result.translatedText;
+        _result = translated;
         _isLoading = false;
       });
-    } catch (e) {
+    } on SarvamException catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showMessage(e.toString());
+      _showMessage(e.parentMessage);
     }
   }
 
