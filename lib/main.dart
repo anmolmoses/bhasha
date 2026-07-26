@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/storage_service.dart';
+import 'services/parent_profile_service.dart';
 import 'services/platform_service.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
@@ -12,6 +13,10 @@ void main() async {
 
   // Initialize storage
   await StorageService().init();
+
+  // Saved voice, tone, and glossary must be in memory before the first bubble
+  // action arrives, which can happen with no screen ever opened.
+  await ParentProfileService().load();
 
   OverlayRequestHandler().init();
 

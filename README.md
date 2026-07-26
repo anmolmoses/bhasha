@@ -8,11 +8,12 @@ Its primary experience is a draggable, system-wide floating bubble. From another
 
 ### In the Flutter app
 
-- Translate text between 35 supported languages.
+- Translate text between 23 supported languages (Sarvam's 22 Indian languages plus English).
 - Automatically detect the source language when enabled.
-- Correct grammar, spelling, and punctuation.
-- Copy translated or corrected text to the clipboard.
+- Hear translations spoken aloud with Bulbul text-to-speech in the parent's saved voice and pace.
+- Copy translated text to the clipboard.
 - Configure default source and target languages.
+- Save the parent's voice, speaking pace, reply tone, and approved-names glossary.
 - Store the Sarvam API key securely on the device.
 - Configure and control the Android floating assistant.
 
@@ -32,16 +33,26 @@ Holding the bubble records speech and appends the result to the focused field, w
 
 **Double-tapping** the bubble translates everything visible on screen and draws the result over the original text. It is off by default; enable it in **Settings → Double-tap screen translation**.
 
+After the bubble replaces text in a field, an Undo pill appears for a few seconds and restores the original text if tapped. Results are also spoken aloud with Bulbul text-to-speech using the parent's saved voice and pace, and parent-facing overlay messages (toasts, the status pill, and errors) render in Kannada when the parent's language is Kannada.
+
+### Parent profile memory
+
+Bhasha keeps a persistent parent profile (`lib/services/parent_profile_service.dart`): the saved voice speaker, speaking pace, reply tone, and an approved-names glossary survive app restarts and shape grammar and rewrite prompts. Recent voice turns are held in a bounded in-memory conversation context that grounds grammar fixes; full message history is not persisted.
+
 ## Current implementation status
 
 | Surface | Status |
 | --- | --- |
 | In-app translation | Implemented |
-| In-app grammar correction | Implemented |
 | One-tap overlay translation | Implemented |
 | One-tap overlay grammar correction | Implemented |
 | Hold-to-speak voice translation | Implemented |
 | Double-tap screen translation | Implemented |
+| Spoken playback of results (Bulbul TTS) | Implemented |
+| Undo after text replacement | Implemented |
+| Persistent parent profile (voice, pace, tone, glossary) | Implemented |
+| Kannada parent-facing overlay strings | Implemented |
+| Contextual long-press message translation | Scaffolded (settings and consent exist; the long-press trigger is not yet wired) |
 | Custom Android keyboard/IME | Scaffolded |
 | Keyboard Translate and Grammar actions | Not yet connected to Sarvam |
 
@@ -139,7 +150,8 @@ Bhasha sends requests directly from the device to the Sarvam API. Sarvam is the 
 - `/translate` (`mayura:v1`) for translation
 - `/text-lid` for source-language detection
 - `/v1/chat/completions` (`sarvam-105b`) for grammar correction
-- `/doc-digitization/job/v1` (`sarvam-vision`) for screen OCR, only as the fallback described above
+- `/text-to-speech` (`bulbul:v3`) for spoken playback of results
+- `/doc-digitization/job/v1` (Sarvam Vision) for screen OCR, only as the fallback described above
 
 Sarvam API usage is billed to the account associated with the API key. The key is not included in the repository.
 
@@ -208,6 +220,9 @@ android/app/src/main/
 │   ├── OverlayService.kt
 │   ├── BhashaAccessibilityService.kt
 │   ├── VoiceCaptureManager.kt
+│   ├── ScreenCaptureService.kt / ScreenCapturePermissionActivity.kt
+│   ├── ScreenTranslationOverlayController.kt
+│   ├── WhatsAppUiAdapter.kt / GenericMessagingUiAdapter.kt
 │   └── CustomKeyboardIME.kt
 └── res/           Keyboard, accessibility, and Android UI resources
 ```
@@ -248,3 +263,4 @@ flutter build apk --debug
 - [One-tap feature notes](ONE_TAP_FEATURE_SUMMARY.md)
 - [Simple guide for parents](SIMPLE_GUIDE_FOR_PARENTS.md)
 - [Implementation summary](IMPLEMENTATION_SUMMARY.md)
+- [Three-minute demo script](THREE_MINUTE_DEMO.md)

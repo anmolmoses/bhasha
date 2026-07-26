@@ -1,16 +1,21 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../constants/languages.dart';
+import '../l10n/parent_strings.dart';
+import '../models/conversation_context.dart';
 import '../models/sarvam_error.dart';
 import '../models/screen_ocr_error.dart';
 import '../models/screen_text_block.dart';
+import 'parent_profile_service.dart';
 import 'platform_service.dart';
 import 'sarvam_service.dart';
 import 'sarvam_vision_service.dart';
 import 'storage_service.dart';
+import 'tts_player.dart';
 
 /// Handles bubble actions coming from the native overlay.
 ///
@@ -25,8 +30,17 @@ class OverlayRequestHandler {
 
   final _platform = PlatformService();
   final _storage = StorageService();
+  final _profileService = ParentProfileService();
+
+  /// Short tail of hold-to-speak turns. In-memory only, so message contents
+  /// never touch disk; used to keep names and facts consistent between what
+  /// the parent dictated and what grammar correction later rewrites.
+  final ConversationContext _context = ConversationContext();
+
   SarvamService _sarvam = SarvamService.shared;
   SarvamVisionService _vision = SarvamVisionService();
+
+  Future<void> Function(String text, String languageCode)? _speakOverride;
 
   bool _initialized = false;
 
@@ -38,6 +52,13 @@ class OverlayRequestHandler {
   /// Test seam for the OCR-only Sarvam Vision client.
   void overrideVisionServiceForTesting(SarvamVisionService service) {
     _vision = service;
+  }
+
+  /// Test seam: replaces (or with null, restores) the Bulbul playback path.
+  void overrideSpeakForTesting(
+    Future<void> Function(String text, String languageCode)? speak,
+  ) {
+    _speakOverride = speak;
   }
 
   void init() {
@@ -119,10 +140,17 @@ class OverlayRequestHandler {
           );
       }
     } on SarvamException catch (e) {
-      // Surface the parent-facing message, never the raw detail.
-      throw PlatformException(code: e.kind.name, message: e.parentMessage);
+      // Surface the parent-facing message - in the parent's language - never
+      // the raw detail.
+      throw PlatformException(
+        code: e.kind.name,
+        message: ParentStrings.localize(e.parentMessage),
+      );
     } on ScreenOcrException catch (e) {
-      throw PlatformException(code: e.kind.name, message: e.parentMessage);
+      throw PlatformException(
+        code: e.kind.name,
+        message: ParentStrings.localize(e.parentMessage),
+      );
     }
   }
 
@@ -130,7 +158,8 @@ class OverlayRequestHandler {
     if (text.trim().isEmpty) {
       throw PlatformException(
         code: 'invalid_arguments',
-        message: 'Tap in a text field with some text first.',
+        message:
+            ParentStrings.localize('Tap in a text field with some text first.'),
       );
     }
   }
@@ -175,6 +204,8 @@ class OverlayRequestHandler {
       targetLanguageCode: targetCode,
     );
 
+    _maybeSpeak(translated, targetCode);
+
     return {
       'action': action,
       'success': true,
@@ -196,7 +227,9 @@ class OverlayRequestHandler {
     if (audioPath == null || audioPath.trim().isEmpty) {
       throw PlatformException(
         code: 'invalid_arguments',
-        message: 'No recording was captured. Hold the button and speak.',
+        message: ParentStrings.localize(
+          'No recording was captured. Hold the button and speak.',
+        ),
       );
     }
 
@@ -223,6 +256,8 @@ class OverlayRequestHandler {
     // Already in the target language: don't pay for a round trip that would
     // only paraphrase what they said.
     if (sourceCode == targetCode) {
+      _rememberTurn(spoken, spoken);
+      _maybeSpeak(spoken, targetCode);
       return {
         'action': 'voice_translate',
         'success': true,
@@ -239,6 +274,9 @@ class OverlayRequestHandler {
       sourceLanguageCode: sourceCode,
       targetLanguageCode: targetCode,
     );
+
+    _rememberTurn(spoken, translated);
+    _maybeSpeak(translated, targetCode);
 
     return {
       'action': 'voice_translate',
@@ -266,15 +304,36 @@ class OverlayRequestHandler {
 
   Future<Map<String, dynamic>> _handleGrammar(String text) async {
     final language = _storage.getTargetLanguage();
+    final profile = _profileService.profile;
+
+    final systemPrompt = StringBuffer()
+      ..writeln(
+        'You correct grammar, spelling, and punctuation in $language text.',
+      )
+      ..writeln(
+        'Return ONLY the corrected text. No explanations, no quotes, no '
+        'commentary. If the text is already correct, return it unchanged.',
+      )
+      ..writeln('Never change names, numbers, dates, times, or amounts.')
+      ..writeln(profile.tone.promptHint);
+
+    final glossary = profile.glossaryPromptBlock;
+    if (glossary.isNotEmpty) {
+      systemPrompt
+        ..writeln()
+        ..writeln(glossary);
+    }
+
+    final dictated = _recentDictationBlock();
+    if (dictated.isNotEmpty) {
+      systemPrompt
+        ..writeln()
+        ..writeln(dictated);
+    }
 
     final corrected = await _sarvam.chat(
       messages: [
-        ChatMessage.system(
-          'You correct grammar, spelling, and punctuation in $language text.\n'
-          'Return ONLY the corrected text. No explanations, no quotes, no '
-          'commentary. If the text is already correct, return it unchanged.\n'
-          'Never change names, numbers, dates, times, or amounts.',
-        ),
+        ChatMessage.system(systemPrompt.toString().trim()),
         ChatMessage.user(text),
       ],
       temperature: 0.0,
@@ -435,12 +494,58 @@ class OverlayRequestHandler {
     return trimmed.substring(0, trimmed.length - 1).trimRight();
   }
 
+  /// Recent hold-to-speak turns, rendered so grammar correction keeps the
+  /// spellings and facts the parent already dictated.
+  String _recentDictationBlock() {
+    final turns = _context.turns;
+    if (turns.isEmpty) return '';
+    final buffer = StringBuffer()
+      ..writeln('The parent recently dictated (keep these spellings and facts '
+          'exactly when they appear):');
+    for (final turn in turns) {
+      buffer.writeln('- Said: "${turn.question}" -> written: "${turn.answer}"');
+    }
+    return buffer.toString().trim();
+  }
+
+  void _rememberTurn(String transcript, String written) {
+    if (transcript.trim().isEmpty) return;
+    _context.addTurn(ContextTurn(question: transcript, answer: written));
+  }
+
+  /// Reads the result aloud with the parent's saved Bulbul voice.
+  ///
+  /// Fire-and-forget on purpose: the text is already in the composer, so a
+  /// playback problem must never surface as a failed action.
+  void _maybeSpeak(String text, String languageCode) {
+    if (text.trim().isEmpty) return;
+    if (!_storage.getSpeakAloud()) return;
+    final speak = _speakOverride ?? _speak;
+    unawaited(speak(text, languageCode));
+  }
+
+  Future<void> _speak(String text, String languageCode) async {
+    try {
+      final profile = _profileService.profile;
+      final audio = await _sarvam.textToSpeech(
+        text: text,
+        targetLanguageCode: languageCode,
+        speaker: profile.voiceSpeaker,
+        pace: profile.pace,
+      );
+      await TtsPlayer().play(audio);
+    } catch (_) {
+      // Best-effort by design; see _maybeSpeak.
+    }
+  }
+
   Future<void> _ensureApiKey() async {
     if (await _storage.hasSarvamApiKey()) return;
     throw PlatformException(
       code: 'missing_api_key',
-      message:
-          'Add your Sarvam API key in Bhasha settings before using the bubble.',
+      message: ParentStrings.localize(
+        'Add your Sarvam API key in Bhasha settings before using the bubble.',
+      ),
     );
   }
 }

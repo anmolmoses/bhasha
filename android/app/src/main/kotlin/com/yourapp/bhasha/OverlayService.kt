@@ -29,6 +29,8 @@ class OverlayService : Service() {
     private var statusBubble: View? = null
     private var statusText: TextView? = null
     private var processingBubble: View? = null
+    private var undoView: View? = null
+    private var undoTimeout: Runnable? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Double-tap detection for screen translation. */
@@ -45,6 +47,9 @@ class OverlayService : Service() {
 
         /** How long the button must be held before capture starts. */
         private const val HOLD_THRESHOLD_MS = 350L
+
+        /** How long the undo pill stays available after a replacement. */
+        private const val UNDO_WINDOW_MS = 8000L
 
         private var currentActionType: String = "translate"
         private var instance: OverlayService? = null
@@ -138,7 +143,7 @@ class OverlayService : Service() {
      * permission prompt.
      */
     private fun startAsOverlayService() {
-        val notification = createNotification("Tap to translate · hold to speak")
+        val notification = createNotification(str("notification_idle"))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
@@ -150,8 +155,10 @@ class OverlayService : Service() {
         }
     }
 
+    private fun str(key: String): String = OverlayStrings.get(this, key)
+
     private fun addMicrophoneServiceType() {
-        val notification = createNotification("Listening…")
+        val notification = createNotification(str("notification_listening"))
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE ->
                 startForeground(
@@ -271,7 +278,7 @@ class OverlayService : Service() {
                     // Check if dropped in dismiss zone
                     if (event.rawY > (screenHeight - dismissZoneHeight)) {
                         // Dismiss the floating button
-                        showToast("Floating button dismissed")
+                        showToast(str("bubble_dismissed"))
                         stopSelf()
                     } else if (deltaX < dragSlop && deltaY < dragSlop) {
                         // It's a click, not a drag
@@ -282,7 +289,7 @@ class OverlayService : Service() {
                 MotionEvent.ACTION_CANCEL -> {
                     cancelHold()
                     if (voiceCapture.isRecording) {
-                        abortVoiceCapture("Cancelled")
+                        abortVoiceCapture(str("cancelled"))
                     }
                     true
                 }
@@ -346,17 +353,18 @@ class OverlayService : Service() {
      */
     private fun beginVoiceCapture() {
         holdRunnable = null
+        hideUndo()
 
         if (BhashaAccessibilityService.getInstance() == null) {
             gestureConsumed = true
-            showToast("⚠️ Enable accessibility service in Settings → Bhasha")
+            showToast(str("enable_accessibility"))
             openAccessibilitySettings()
             return
         }
 
         if (!hasMicPermission()) {
             gestureConsumed = true
-            showToast("Allow the microphone in Bhasha, then hold again")
+            showToast(str("allow_microphone"))
             openAppForMicPermission()
             return
         }
@@ -368,14 +376,14 @@ class OverlayService : Service() {
 
             override fun onMaxDurationReached() {
                 // Never silently discard speech: stop and translate what we have.
-                showToast("That's the 30-second limit — translating what I heard")
+                showToast(str("limit_reached"))
                 finishVoiceCapture()
             }
         })
 
         if (!started) {
             gestureConsumed = true
-            showToast("✗ Could not start the microphone")
+            showToast(str("mic_failed"))
             return
         }
 
@@ -385,15 +393,15 @@ class OverlayService : Service() {
             text = "●"
             background = createRecordingBackground()
         }
-        showStatus("Listening… speak now", spinner = false)
+        showStatus(str("listening_speak_now"), spinner = false)
     }
 
     private fun updateRecordingStatus(millis: Long) {
         val remaining = ((VoiceCaptureManager.MAX_DURATION_MS - millis) / 1000).coerceAtLeast(0)
         val message = if (millis >= VoiceCaptureManager.WARN_AFTER_MS) {
-            "Listening… ${remaining}s left"
+            str("listening_remaining").format(remaining)
         } else {
-            "Listening… ${millis / 1000}s"
+            str("listening_elapsed").format(millis / 1000)
         }
         statusText?.text = message
     }
@@ -405,14 +413,14 @@ class OverlayService : Service() {
 
         if (audio == null) {
             hideStatus()
-            showToast("Hold the button while you speak")
+            showToast(str("hold_while_speaking"))
             return
         }
 
         // Rebuild rather than retitle: the listening pill has no spinner, and
         // the parent needs to see that something is now in flight.
         hideStatus()
-        showStatus("Translating what you said…", spinner = true)
+        showStatus(str("translating_speech"), spinner = true)
         BhashaChannel.processOverlayAction(
             action = "voice_translate",
             text = "",
@@ -427,15 +435,19 @@ class OverlayService : Service() {
                 val resultText = data?.get("resultText") as? String
                 if (success && !resultText.isNullOrBlank()) {
                     val accessibilityService = BhashaAccessibilityService.getInstance()
+                    // Snapshot what the field held before the insert, so undo
+                    // can put exactly that back (possibly nothing).
+                    val before = accessibilityService?.getTextFromFocusedField()
                     val inserted =
                         accessibilityService?.insertTextInFocusedField(resultText) == true
                     if (inserted) {
-                        showToast("✓ Added to your message")
+                        showToast(str("added_to_message"))
+                        showUndo(before ?: "")
                     } else {
-                        showToast("✗ Tap in the message box first")
+                        showToast(str("tap_message_box"))
                     }
                 } else {
-                    showToast("✗ ${error ?: "Could not translate what you said"}")
+                    showToast("✗ ${error ?: str("voice_failed")}")
                 }
             }
         }
@@ -508,24 +520,25 @@ class OverlayService : Service() {
         val accessibilityService = BhashaAccessibilityService.getInstance()
 
         if (accessibilityService == null) {
-            showToast("⚠️ Enable accessibility service in Settings → Bhasha")
+            showToast(str("enable_accessibility"))
             openAccessibilitySettings()
             return
         }
 
         val actionType = getCurrentActionType()
+        hideUndo()
 
         // Step 1: Get text from focused field
         val originalText = accessibilityService.getTextFromFocusedField()
 
         if (originalText.isNullOrEmpty()) {
-            showToast("No text found. Tap in a text field, or hold to speak.")
+            showToast(str("no_text_found"))
             return
         }
 
         // Show loading state
         showStatus(
-            if (actionType == "grammar") "Checking grammar…" else "Translating…",
+            if (actionType == "grammar") str("checking_grammar") else str("translating"),
             spinner = true
         )
 
@@ -545,17 +558,20 @@ class OverlayService : Service() {
                         // Step 3: Replace text in field
                         val replaced = accessibilityService.replaceTextInFocusedField(resultText)
                         if (replaced) {
-                            val successMsg = if (actionType == "grammar") "✓ Grammar checked!" else "✓ Translated!"
+                            val successMsg = if (actionType == "grammar") str("grammar_checked") else str("translated")
                             showToast(successMsg)
+                            // A replacement destroys what the parent typed;
+                            // give them a window to take it back.
+                            showUndo(originalText)
                         } else {
-                            showToast("✗ Couldn't replace text")
+                            showToast(str("couldnt_replace"))
                         }
                     } else {
-                        val failMsg = if (actionType == "grammar") "✗ Grammar check failed" else "✗ Translation failed"
-                        showToast(failMsg)
+                        val failMsg = if (actionType == "grammar") str("grammar_failed") else str("translation_failed")
+                        showToast("✗ $failMsg")
                     }
                 } else {
-                    val failMsg = if (actionType == "grammar") "Grammar check failed" else "Translation failed"
+                    val failMsg = if (actionType == "grammar") str("grammar_failed") else str("translation_failed")
                     showToast("✗ ${error ?: failMsg}")
                 }
             }
@@ -653,6 +669,78 @@ class OverlayService : Service() {
         statusText = null
     }
 
+    // ---------------------------------------------------------------------
+    // Undo pill
+    // ---------------------------------------------------------------------
+
+    /**
+     * Offers to put [restoreText] back into the focused field.
+     *
+     * A tap-to-translate that replaced the wrong thing must be recoverable:
+     * the pill sits under the bubble for [UNDO_WINDOW_MS], restores the exact
+     * pre-action text on tap (including "nothing", after a voice insert into
+     * an empty composer), and then gets out of the way.
+     */
+    private fun showUndo(restoreText: String) {
+        hideUndo()
+
+        val pill = Button(this).apply {
+            text = str("undo")
+            textSize = 13f
+            isAllCaps = false
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 48f
+                setColor(Color.parseColor("#2D3748"))
+            }
+            stateListAnimator = null
+            elevation = 8f
+            setPadding(40, 8, 40, 8)
+            setOnClickListener {
+                val service = BhashaAccessibilityService.getInstance()
+                val restored = service?.replaceTextInFocusedField(restoreText) == true
+                showToast(if (restored) str("restored") else str("restore_failed"))
+                hideUndo()
+            }
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            // Touchable (unlike the status pill): the whole point is the tap.
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = 20
+            // Just below the bubble's default spot so it reads as "about what
+            // the bubble just did".
+            y = 200 + (64 * resources.displayMetrics.density).toInt()
+        }
+
+        windowManager?.addView(pill, params)
+        undoView = pill
+
+        val timeout = Runnable { hideUndo() }
+        undoTimeout = timeout
+        mainHandler.postDelayed(timeout, UNDO_WINDOW_MS)
+    }
+
+    private fun hideUndo() {
+        undoTimeout?.let { mainHandler.removeCallbacks(it) }
+        undoTimeout = null
+        undoView?.let {
+            windowManager?.removeView(it)
+        }
+        undoView = null
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         cancelHold()
@@ -664,6 +752,7 @@ class OverlayService : Service() {
         }
         floatingView = null
         hideStatus()
+        hideUndo()
     }
 
     // ---------------------------------------------------------------------

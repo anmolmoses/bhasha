@@ -2,20 +2,22 @@
 
 ## Project Overview
 
-Bhasha is a Flutter Android app for translation and grammar checking using the Sarvam API. It has two main Android integration surfaces:
+Bhasha is a Flutter Android app for translation, grammar correction, hold-to-speak voice input, and double-tap screen translation using the Sarvam API (Sarvam is the only provider; the OpenAI integration was removed). It has four Android integration surfaces:
 
-- A system-wide floating overlay button.
-- A custom Android keyboard/IME.
+- A system-wide floating overlay bubble (tap to process the focused field, hold to speak, double-tap to translate the visible screen).
+- An accessibility service that reads and replaces text in the focused editable field and reads visible screen text for screen translation.
+- A MediaProjection screen-capture service used only as the OCR fallback for double-tap screen translation.
+- A custom Android keyboard/IME (scaffolded; its AI actions are placeholders).
 
-Keep Flutter responsible for the app UI, settings, API-key flow, and service coordination. Keep Android-specific behavior in the native Kotlin layer.
+Keep Flutter responsible for the app UI, settings, API-key flow, Sarvam requests, and service coordination. Keep Android-specific behavior in the native Kotlin layer.
 
 ## Repository Layout
 
 - `lib/main.dart` - Flutter entrypoint.
 - `lib/screens/` - Main app screens, onboarding, home, and settings.
 - `lib/widgets/` - Reusable Flutter UI components.
-- `lib/services/` - Storage, Sarvam API calls, platform-channel wrappers, and overlay request handling.
-- `lib/models/` - Data models and app mode enums.
+- `lib/services/` - Storage, Sarvam API calls (`sarvam_service.dart`, `sarvam_vision_service.dart` for screen OCR), parent profile persistence (`parent_profile_service.dart`), voice prompts, platform-channel wrappers, and overlay request handling.
+- `lib/models/` - Data models, parent profile, conversation context, screen text blocks, and app mode enums.
 - `lib/theme/` - App theme.
 - `lib/constants/` - Static app constants such as languages.
 - `android/app/src/main/kotlin/com/yourapp/bhasha/` - Native Android services and activity integration.
@@ -80,6 +82,8 @@ Existing docs include:
 - `PROJECT_STATUS.md` and `IMPLEMENTATION_SUMMARY.md` - Implementation state and history.
 - `ONE_TAP_FEATURE_SUMMARY.md` - One-tap feature notes.
 - `SIMPLE_GUIDE_FOR_PARENTS.md` - Simplified user explanation.
+- `SARVAM_BUILDATHON.md` - Buildathon product specification and acceptance checklist.
+- `THREE_MINUTE_DEMO.md` - Demo script.
 
 Update docs when user-facing setup, permissions, app modes, or feature behavior changes.
 

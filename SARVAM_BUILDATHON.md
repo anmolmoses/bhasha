@@ -104,13 +104,7 @@ The novelty is the interaction model: a voice layer that lives over the app the 
 
 ### Impact
 
-The user gains independence in a repeated daily task. Measure:
-
-- percentage of flows completed without help;
-- time from holding the bubble to a ready-to-send message;
-- preservation of names, dates, times, amounts, and phone numbers;
-- success on spoken self-corrections;
-- number of app switches avoided.
+The user gains independence in a repeated daily task. The full argument — beneficiary, frequency, baseline, and the one metric that moves — is in the [Impact case](#impact-case) section below.
 
 ### Delight
 
@@ -122,6 +116,48 @@ The user gains independence in a repeated daily task. Measure:
 - no technical terminology;
 - no automatic sending;
 - a visible undo action after replacing text.
+
+---
+
+## Impact case
+
+### Beneficiary
+
+A specific person, not a demographic: a Kannada-speaking parent in Bengaluru in her fifties. She types and reads Kannada comfortably and uses WhatsApp daily, but her child's school runs English-only WhatsApp groups, and her bank, apartment association, and local services all message her in English. She is the family's default recipient of these messages and, today, cannot act on them alone.
+
+### Frequency
+
+Our working estimate is **5–15 English messages per day** that she cannot confidently read or answer: school group announcements, fee and form reminders, bank and delivery notifications, and society notices. This is an assumption to validate with real usage logging, not measured data — it is drawn from observing one family's WhatsApp inbox, and the first week of real use should replace it with a real count. Even at the low end, that is an every-single-day job, which is what makes the impact compound.
+
+### Current baseline
+
+What this costs today:
+
+- She waits hours for her child or a relative to be free to translate — the message's useful window often closes first.
+- Consent forms, fee deadlines, and RSVP-style messages get missed or answered late.
+- Some replies are simply never sent; the message dies unanswered.
+- The do-it-yourself alternative is a ten-step copy-paste loop across two apps, and the reply still isn't in her own words.
+- Every message reinforces dependence: the person the school hears from is the child, not the parent.
+
+### The one metric that moves
+
+**Share of English messages answered same-hour by the parent themselves.**
+
+Baseline today: roughly **~20%** (our own observation of one household — an assumption to validate, not a study). The demo argues for a plausible improvement path of **5–10 percentage points** in the first weeks of real use, because Bhasha removes exactly the two blockers behind the other 80%: understanding cost (spoken Kannada playback, one tap) and production cost (hold-to-speak, English draft in the field, parent presses Send).
+
+We deliberately track one metric rather than five. Time-to-draft, entity preservation, and app switches avoided are supporting evidence worth narrating in the demo, but the claim the demo makes is: messages this parent used to leave for someone else, she now answers herself, in the hour they arrive.
+
+### Demo evidence map
+
+Each rubric parameter is carried by a specific moment in the three-minute demo:
+
+| Rubric parameter | Demo moment |
+| --- | --- |
+| JTBD completion | Hold-to-speak reply inside WhatsApp: focus field, hold, speak Kannada, release, English draft appears, parent presses Send — no app switch, no helper |
+| Voice Experience | Code-mixed Kannada-English speech ("ನಾನು Wednesday morning ಬರುತ್ತೇನೆ") transcribed and translated correctly, plus results spoken aloud with Bulbul in the saved voice and pace |
+| Memory | Kill and reopen the app: voice speaker, pace, tone, and an approved name from the glossary survive the restart and shape the next grammar fix |
+| Delight | The Undo pill restores the parent's original text after a replacement; status and error copy is honest and rendered in Kannada |
+| Creativity | The system-wide floating bubble: the assistant lives inside WhatsApp with zero app-switching, instead of being another app to learn |
 
 ---
 
