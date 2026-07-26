@@ -441,10 +441,16 @@ class SarvamService {
 
   Map<String, dynamic> _decode(http.Response response, String label) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      _log('$label failed with HTTP ${response.statusCode}');
+      // Sarvam explains *why* a 4xx happened in the body. Without it a 400 is
+      // undebuggable, so surface it - debug builds only, and truncated, since
+      // an error body can echo the submitted text back.
+      final reason = _describeError(response.body);
+      _log('$label failed with HTTP ${response.statusCode}'
+          '${reason.isEmpty ? '' : ': $reason'}');
       throw SarvamException.fromStatus(
         response.statusCode,
-        debugDetail: '$label HTTP ${response.statusCode}',
+        debugDetail: '$label HTTP ${response.statusCode}'
+            '${reason.isEmpty ? '' : ' - $reason'}',
       );
     }
     final Object? decoded;
@@ -505,6 +511,33 @@ class SarvamService {
     }
     flush();
     return chunks.where((c) => c.isNotEmpty).toList(growable: false);
+  }
+
+  /// Pulls a short human-readable reason out of a Sarvam error body.
+  ///
+  /// Returns an empty string in release builds so error text never reaches
+  /// production logs.
+  @visibleForTesting
+  static String describeError(String body) => _describeError(body);
+
+  static String _describeError(String body) {
+    if (!kDebugMode || body.isEmpty) return '';
+    String reason = body;
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final error = decoded['error'];
+        reason = switch (error) {
+          Map() => (error['message'] ?? error['reason'] ?? error).toString(),
+          String() => error,
+          _ => (decoded['message'] ?? decoded['detail'] ?? body).toString(),
+        };
+      }
+    } on FormatException {
+      // Non-JSON body: fall through and use it verbatim.
+    }
+    reason = reason.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return reason.length > 300 ? '${reason.substring(0, 300)}...' : reason;
   }
 
   /// Debug-only. Never receives keys, audio, screenshots, or message text.

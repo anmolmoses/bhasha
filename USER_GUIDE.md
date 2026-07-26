@@ -51,6 +51,17 @@ Bhasha offers two ways to use it:
 - Choose "Translate" or "Check Grammar"
 - Copy the result
 
+**Speaking instead of typing**:
+
+- Press and hold the button instead of tapping it
+- It turns red and shows "Listening…"
+- Speak in any language — you do not have to tell Bhasha which one
+- Let go, and your words appear in the message box in your chosen target language
+- Recording stops on its own after 28 seconds, so nothing is lost
+- Whatever you had already typed stays; the spoken part is added to the end
+
+The first time you hold the button, Android asks for microphone permission. Bhasha opens itself to show that prompt; grant it, then hold the button again.
+
 **Best for**: Quick translations while using other apps
 
 ### 2. Custom Keyboard Mode (Advanced)

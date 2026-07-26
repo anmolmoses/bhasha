@@ -1,194 +1,82 @@
 package com.yourapp.bhasha
 
+import android.Manifest
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import android.content.Context
-import android.text.TextUtils
+import android.content.pm.PackageManager
 import androidx.annotation.NonNull
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.MethodChannel
-import android.os.Handler
-import android.os.Looper
 
-class MainActivity: FlutterActivity() {
-    companion object {
-        private var methodChannelRef: MethodChannel? = null
+/**
+ * Renders the Bhasha UI on the process-scoped engine created by
+ * [BhashaApplication].
+ *
+ * This activity no longer owns the MethodChannel. Destroying it must not take
+ * the Dart side down with it, because that is the normal state while the
+ * parent is using the bubble inside another app.
+ */
+class MainActivity : FlutterActivity() {
 
-        fun processOverlayAction(
-            action: String,
-            text: String,
-            callback: (success: Boolean, data: Map<String, Any?>?, error: String?) -> Unit
-        ) {
-            val channel = methodChannelRef
-            if (channel == null) {
-                callback(false, null, "Bhasha is not ready. Open the app once to initialize.")
-                return
-            }
+    /** Attach to the shared engine rather than building a throwaway one. */
+    override fun getCachedEngineId(): String = BhashaApplication.ENGINE_ID
 
-            Handler(Looper.getMainLooper()).post {
-                channel.invokeMethod(
-                    "processOverlayAction",
-                    hashMapOf(
-                        "action" to action,
-                        "text" to text
-                    ),
-                    object : MethodChannel.Result {
-                        override fun success(result: Any?) {
-                            val map = (result as? Map<*, *>)?.mapNotNull { entry ->
-                                val key = entry.key as? String ?: return@mapNotNull null
-                                key to entry.value
-                            }?.toMap()
-                            callback(true, map, null)
-                        }
-
-                        override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
-                            callback(false, null, errorMessage ?: "Something went wrong ($errorCode)")
-                        }
-
-                        override fun notImplemented() {
-                            callback(false, null, "Process overlay action not implemented.")
-                        }
-                    }
-                )
-            }
-        }
-    }
-
-    private val CHANNEL = "com.yourapp.bhasha/native"
-    private val OVERLAY_PERMISSION_REQUEST = 1001
-    private lateinit var methodChannel: MethodChannel
+    /** The engine outlives this activity by design. */
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-        methodChannelRef = methodChannel
-
-        methodChannel.setMethodCallHandler { call, result ->
-            when (call.method) {
-                "startOverlayService" -> {
-                    if (checkOverlayPermission()) {
-                        startOverlayService()
-                        result.success(true)
-                    } else {
-                        requestOverlayPermission()
-                        result.success(false)
-                    }
-                }
-                "stopOverlayService" -> {
-                    stopOverlayService()
-                    result.success(true)
-                }
-                "checkOverlayPermission" -> {
-                    result.success(checkOverlayPermission())
-                }
-                "requestOverlayPermission" -> {
-                    requestOverlayPermission()
-                    result.success(null)
-                }
-                "openKeyboardSettings" -> {
-                    openKeyboardSettings()
-                    result.success(true)
-                }
-                "checkAccessibilityPermission" -> {
-                    result.success(checkAccessibilityPermission())
-                }
-                "requestAccessibilityPermission" -> {
-                    requestAccessibilityPermission()
-                    result.success(null)
-                }
-                "updateFloatingActionType" -> {
-                    val actionType = call.argument<String>("actionType") ?: "translate"
-                    OverlayService.updateActionType(actionType)
-                    result.success(true)
-                }
-                "translateText" -> {
-                    val text = call.argument<String>("text")
-                    val sourceLang = call.argument<String>("sourceLang")
-                    val targetLang = call.argument<String>("targetLang")
-                    // This will be called from native code and sent back to Flutter
-                    result.success("Translation handled by Flutter")
-                }
-                "checkGrammar" -> {
-                    val text = call.argument<String>("text")
-                    val language = call.argument<String>("language")
-                    // This will be called from native code and sent back to Flutter
-                    result.success("Grammar check handled by Flutter")
-                }
-                else -> {
-                    result.notImplemented()
-                }
-            }
-        }
+        // No-op when the Application already attached it; present so the UI
+        // still works if this activity is ever hosted on a fresh engine.
+        BhashaChannel.attachTo(flutterEngine, this)
     }
 
-    private fun checkOverlayPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Settings.canDrawOverlays(this)
-        } else {
-            true
-        }
+    override fun onResume() {
+        super.onResume()
+        // Lets permission requests use startActivityForResult while we are up.
+        BhashaChannel.bindActivity(this)
+        maybeRequestMicPermission(intent)
     }
 
-    private fun requestOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST)
-        }
+    /** The bubble sends the parent here when they hold it without RECORD_AUDIO. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeRequestMicPermission(intent)
     }
 
-    private fun startOverlayService() {
-        val intent = Intent(this, OverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
-    }
+    private fun maybeRequestMicPermission(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_REQUEST_MIC_PERMISSION, false) != true) return
+        // Consume it, so rotating the screen does not re-prompt.
+        intent.removeExtra(EXTRA_REQUEST_MIC_PERMISSION)
 
-    private fun stopOverlayService() {
-        val intent = Intent(this, OverlayService::class.java)
-        stopService(intent)
-    }
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) return
 
-    private fun openKeyboardSettings() {
-        val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-        startActivity(intent)
-    }
-
-    private fun checkAccessibilityPermission(): Boolean {
-        val service = "${packageName}/${BhashaAccessibilityService::class.java.name}"
-        val enabledServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.RECORD_AUDIO),
+            BhashaChannel.MIC_PERMISSION_REQUEST
         )
-        return enabledServices?.contains(service) == true
     }
 
-    private fun requestAccessibilityPermission() {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        startActivity(intent)
+    override fun onDestroy() {
+        BhashaChannel.unbindActivity(this)
+        super.onDestroy()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == OVERLAY_PERMISSION_REQUEST) {
-            if (checkOverlayPermission()) {
-                startOverlayService()
-            }
+        if (requestCode == BhashaChannel.OVERLAY_PERMISSION_REQUEST) {
+            BhashaChannel.onOverlayPermissionResult()
         }
     }
 
-    override fun onDestroy() {
-        if (::methodChannel.isInitialized && methodChannelRef == methodChannel) {
-            methodChannelRef = null
-        }
-        super.onDestroy()
+    companion object {
+        const val EXTRA_REQUEST_MIC_PERMISSION = "bhasha.request_mic_permission"
     }
 }

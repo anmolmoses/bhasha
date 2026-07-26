@@ -1,8 +1,11 @@
 package com.yourapp.bhasha
 
+import android.Manifest
 import android.app.*
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
@@ -11,19 +14,32 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.view.*
 import android.widget.*
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import java.io.File
 
 class OverlayService : Service() {
     private var windowManager: WindowManager? = null
-    private var floatingView: View? = null
-    private var processingBubble: View? = null
+    private var floatingView: Button? = null
+    private var statusBubble: View? = null
+    private var statusText: TextView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val voiceCapture by lazy { VoiceCaptureManager(this) }
+    private var holdRunnable: Runnable? = null
+    private var gestureConsumed = false
 
     companion object {
         private const val CHANNEL_ID = "BhashaOverlayChannel"
         private const val NOTIFICATION_ID = 1
+
+        /** How long the button must be held before capture starts. */
+        private const val HOLD_THRESHOLD_MS = 350L
+
         private var currentActionType: String = "translate"
 
         fun updateActionType(actionType: String) {
@@ -38,7 +54,7 @@ class OverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
+        startAsOverlayService()
         createFloatingButton()
     }
 
@@ -51,14 +67,14 @@ class OverlayService : Service() {
                 "Bhasha Quick Translate",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Tap the button to instantly translate text"
+                description = "Tap to translate, hold to speak"
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
     }
 
-    private fun createNotification(): Notification {
+    private fun createNotification(text: String): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
@@ -67,10 +83,53 @@ class OverlayService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Bhasha Active")
-            .setContentText("Tap floating button for instant translation")
+            .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
+            .setOngoing(true)
             .build()
+    }
+
+    /**
+     * The service runs as `specialUse` normally and adds the `microphone` type
+     * only while recording.
+     *
+     * It has to be done in this order: declaring the microphone type up front
+     * would make `startForeground` throw on a device where the parent has not
+     * granted RECORD_AUDIO yet, killing the bubble before they ever reach the
+     * permission prompt.
+     */
+    private fun startAsOverlayService() {
+        val notification = createNotification("Tap to translate · hold to speak")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    private fun addMicrophoneServiceType() {
+        val notification = createNotification("Listening…")
+        when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE ->
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ->
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                )
+            else -> startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun createFloatingButton() {
@@ -78,13 +137,8 @@ class OverlayService : Service() {
         val displayMetrics = resources.displayMetrics
         val screenHeight = displayMetrics.heightPixels
 
-        // Create simple floating button with icon
-        val buttonText = when (getCurrentActionType()) {
-            "grammar" -> "G"
-            else -> "T"
-        }
         val button = Button(this).apply {
-            text = buttonText  // T for Translate, G for Grammar
+            text = idleButtonLabel()
             textSize = 24f
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -116,6 +170,7 @@ class OverlayService : Service() {
         var initialTouchX = 0f
         var initialTouchY = 0f
         val dismissZoneHeight = screenHeight * 0.15  // Bottom 15% of screen
+        val dragSlop = 10 * displayMetrics.density
 
         button.setOnTouchListener { view, event ->
             when (event.action) {
@@ -124,9 +179,22 @@ class OverlayService : Service() {
                     initialY = params.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
+                    gestureConsumed = false
+                    scheduleHold()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    val movedX = kotlin.math.abs(event.rawX - initialTouchX)
+                    val movedY = kotlin.math.abs(event.rawY - initialTouchY)
+
+                    // While recording the button stays put: small hand movements
+                    // during speech must not turn into a drag or a dismiss.
+                    if (voiceCapture.isRecording) return@setOnTouchListener true
+
+                    if (movedX > dragSlop || movedY > dragSlop) {
+                        cancelHold()
+                    }
+
                     params.x = initialX + (initialTouchX - event.rawX).toInt()
                     params.y = initialY + (event.rawY - initialTouchY).toInt()
 
@@ -146,10 +214,18 @@ class OverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    cancelHold()
+
                     // Reset visual state
                     view.alpha = 1f
                     view.scaleX = 1f
                     view.scaleY = 1f
+
+                    if (voiceCapture.isRecording) {
+                        finishVoiceCapture()
+                        return@setOnTouchListener true
+                    }
+                    if (gestureConsumed) return@setOnTouchListener true
 
                     val deltaX = kotlin.math.abs(event.rawX - initialTouchX)
                     val deltaY = kotlin.math.abs(event.rawY - initialTouchY)
@@ -159,9 +235,16 @@ class OverlayService : Service() {
                         // Dismiss the floating button
                         showToast("Floating button dismissed")
                         stopSelf()
-                    } else if (deltaX < 10 && deltaY < 10) {
+                    } else if (deltaX < dragSlop && deltaY < dragSlop) {
                         // It's a click, not a drag
                         performOverlayAction()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    cancelHold()
+                    if (voiceCapture.isRecording) {
+                        abortVoiceCapture("Cancelled")
                     }
                     true
                 }
@@ -171,6 +254,11 @@ class OverlayService : Service() {
 
         windowManager?.addView(button, params)
         floatingView = button
+    }
+
+    private fun idleButtonLabel(): String = when (getCurrentActionType()) {
+        "grammar" -> "G"
+        else -> "T"
     }
 
     private fun createCircleBackground(): GradientDrawable {
@@ -183,6 +271,193 @@ class OverlayService : Service() {
             gradientType = GradientDrawable.LINEAR_GRADIENT
         }
     }
+
+    private fun createRecordingBackground(): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            colors = intArrayOf(
+                Color.parseColor("#F5365C"),  // Red: recording
+                Color.parseColor("#F56036")
+            )
+            gradientType = GradientDrawable.LINEAR_GRADIENT
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Hold to speak
+    // ---------------------------------------------------------------------
+
+    private fun scheduleHold() {
+        cancelHold()
+        val runnable = Runnable { beginVoiceCapture() }
+        holdRunnable = runnable
+        mainHandler.postDelayed(runnable, HOLD_THRESHOLD_MS)
+    }
+
+    private fun cancelHold() {
+        holdRunnable?.let { mainHandler.removeCallbacks(it) }
+        holdRunnable = null
+    }
+
+    /**
+     * HOLD-TO-SPEAK WORKFLOW
+     * 1. Record the parent's voice while the button is held
+     * 2. Send the audio to Dart, which transcribes it and translates it into
+     *    the language selected in the Bhasha app
+     * 3. Insert the translation into the focused composer
+     */
+    private fun beginVoiceCapture() {
+        holdRunnable = null
+
+        if (BhashaAccessibilityService.getInstance() == null) {
+            gestureConsumed = true
+            showToast("⚠️ Enable accessibility service in Settings → Bhasha")
+            openAccessibilitySettings()
+            return
+        }
+
+        if (!hasMicPermission()) {
+            gestureConsumed = true
+            showToast("Allow the microphone in Bhasha, then hold again")
+            openAppForMicPermission()
+            return
+        }
+
+        val started = voiceCapture.start(object : VoiceCaptureManager.Listener {
+            override fun onElapsed(millis: Long) {
+                updateRecordingStatus(millis)
+            }
+
+            override fun onMaxDurationReached() {
+                // Never silently discard speech: stop and translate what we have.
+                showToast("That's the 30-second limit — translating what I heard")
+                finishVoiceCapture()
+            }
+        })
+
+        if (!started) {
+            gestureConsumed = true
+            showToast("✗ Could not start the microphone")
+            return
+        }
+
+        addMicrophoneServiceType()
+        vibrate(30)
+        floatingView?.apply {
+            text = "●"
+            background = createRecordingBackground()
+        }
+        showStatus("Listening… speak now", spinner = false)
+    }
+
+    private fun updateRecordingStatus(millis: Long) {
+        val remaining = ((VoiceCaptureManager.MAX_DURATION_MS - millis) / 1000).coerceAtLeast(0)
+        val message = if (millis >= VoiceCaptureManager.WARN_AFTER_MS) {
+            "Listening… ${remaining}s left"
+        } else {
+            "Listening… ${millis / 1000}s"
+        }
+        statusText?.text = message
+    }
+
+    private fun finishVoiceCapture() {
+        val audio = voiceCapture.stop()
+        restoreIdleButton()
+        vibrate(20)
+
+        if (audio == null) {
+            hideStatus()
+            showToast("Hold the button while you speak")
+            return
+        }
+
+        // Rebuild rather than retitle: the listening pill has no spinner, and
+        // the parent needs to see that something is now in flight.
+        hideStatus()
+        showStatus("Translating what you said…", spinner = true)
+        BhashaChannel.processOverlayAction(
+            action = "voice_translate",
+            text = "",
+            audioPath = audio.path
+        ) { success, data, error ->
+            mainHandler.post {
+                // Delete on every path — success, failure, and malformed reply
+                // alike. Recorded speech must never outlive the request.
+                deleteQuietly(audio)
+                hideStatus()
+
+                val resultText = data?.get("resultText") as? String
+                if (success && !resultText.isNullOrBlank()) {
+                    val accessibilityService = BhashaAccessibilityService.getInstance()
+                    val inserted =
+                        accessibilityService?.insertTextInFocusedField(resultText) == true
+                    if (inserted) {
+                        showToast("✓ Added to your message")
+                    } else {
+                        showToast("✗ Tap in the message box first")
+                    }
+                } else {
+                    showToast("✗ ${error ?: "Could not translate what you said"}")
+                }
+            }
+        }
+    }
+
+    private fun abortVoiceCapture(reason: String) {
+        voiceCapture.cancel()
+        restoreIdleButton()
+        hideStatus()
+        showToast(reason)
+    }
+
+    private fun restoreIdleButton() {
+        startAsOverlayService()
+        floatingView?.apply {
+            text = idleButtonLabel()
+            background = createCircleBackground()
+        }
+    }
+
+    private fun hasMicPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    /**
+     * A service cannot show a runtime-permission dialog, so send the parent to
+     * the app, which asks for the microphone on resume.
+     */
+    private fun openAppForMicPermission() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra(MainActivity.EXTRA_REQUEST_MIC_PERMISSION, true)
+        }
+        startActivity(intent)
+    }
+
+    private fun deleteQuietly(file: File) {
+        try {
+            if (file.exists()) file.delete()
+        } catch (e: SecurityException) {
+            // Cache files are cleaned up by the system if this ever fails.
+        }
+    }
+
+    private fun vibrate(millis: Long) {
+        val vibrator = ContextCompat.getSystemService(this, Vibrator::class.java) ?: return
+        if (!vibrator.hasVibrator()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(
+                VibrationEffect.createOneShot(millis, VibrationEffect.DEFAULT_AMPLITUDE)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(millis)
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Tap to translate the field
+    // ---------------------------------------------------------------------
 
     /**
      * ONE-CLICK ACTION WORKFLOW
@@ -206,20 +481,25 @@ class OverlayService : Service() {
         val originalText = accessibilityService.getTextFromFocusedField()
 
         if (originalText.isNullOrEmpty()) {
-            showToast("No text found. Tap in a text field first.")
+            showToast("No text found. Tap in a text field, or hold to speak.")
             return
         }
 
         // Show loading state
-        showProcessingBubble(actionType)
+        showStatus(
+            if (actionType == "grammar") "Checking grammar…" else "Translating…",
+            spinner = true
+        )
 
-        // Step 2: Send to Flutter for processing
-        MainActivity.processOverlayAction(
+        // Step 2: Send to Flutter for processing.
+        // Routed through the process-scoped engine, so this works even though
+        // MainActivity is almost certainly destroyed by now.
+        BhashaChannel.processOverlayAction(
             action = actionType,
             text = originalText
         ) { success, data, error ->
             mainHandler.post {
-                hideProcessingBubble()
+                hideStatus()
 
                 if (success && data != null) {
                     val resultText = data["resultText"] as? String
@@ -265,11 +545,20 @@ class OverlayService : Service() {
         }
     }
 
-    private fun showProcessingBubble(actionType: String = "translate") {
-        if (processingBubble != null) return
+    // ---------------------------------------------------------------------
+    // Status pill
+    // ---------------------------------------------------------------------
+
+    /** Shows, or updates in place, the pill next to the bubble. */
+    private fun showStatus(message: String, spinner: Boolean) {
+        if (statusBubble != null) {
+            statusText?.text = message
+            return
+        }
 
         val bubble = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 48f
@@ -279,25 +568,23 @@ class OverlayService : Service() {
             setPadding(32, 24, 32, 24)
         }
 
-        val progressBar = ProgressBar(this).apply {
-            val size = (24 * resources.displayMetrics.density).toInt()
-            layoutParams = LinearLayout.LayoutParams(size, size)
-            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        if (spinner) {
+            val progressBar = ProgressBar(this).apply {
+                val size = (24 * resources.displayMetrics.density).toInt()
+                layoutParams = LinearLayout.LayoutParams(size, size)
+                indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+            }
+            bubble.addView(progressBar)
         }
 
-        val messageText = when (actionType) {
-            "grammar" -> "Checking grammar..."
-            else -> "Translating..."
-        }
         val text = TextView(this).apply {
-            text = messageText
+            this.text = message
             setTextColor(Color.WHITE)
             textSize = 14f
             typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-            setPadding(24, 0, 0, 0)
+            setPadding(if (spinner) 24 else 0, 0, 0, 0)
         }
 
-        bubble.addView(progressBar)
         bubble.addView(text)
 
         val params = WindowManager.LayoutParams(
@@ -316,21 +603,28 @@ class OverlayService : Service() {
         }
 
         windowManager?.addView(bubble, params)
-        processingBubble = bubble
+        statusBubble = bubble
+        statusText = text
     }
 
-    private fun hideProcessingBubble() {
-        processingBubble?.let {
+    private fun hideStatus() {
+        statusBubble?.let {
             windowManager?.removeView(it)
-            processingBubble = null
         }
+        statusBubble = null
+        statusText = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        cancelHold()
+        if (voiceCapture.isRecording) {
+            voiceCapture.cancel()
+        }
         floatingView?.let {
             windowManager?.removeView(it)
         }
-        hideProcessingBubble()
+        floatingView = null
+        hideStatus()
     }
 }

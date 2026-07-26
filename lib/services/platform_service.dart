@@ -104,6 +104,25 @@ class PlatformService {
     }
   }
 
+  // Microphone (hold-to-speak)
+  Future<bool> checkMicPermission() async {
+    try {
+      final result = await platform.invokeMethod('checkMicPermission');
+      return result as bool;
+    } catch (e) {
+      print('Error checking microphone permission: $e');
+      return false;
+    }
+  }
+
+  Future<void> requestMicPermission() async {
+    try {
+      await platform.invokeMethod('requestMicPermission');
+    } catch (e) {
+      print('Error requesting microphone permission: $e');
+    }
+  }
+
   // Update floating action type
   Future<void> updateFloatingActionType(String actionType) async {
     try {
@@ -111,41 +130,6 @@ class PlatformService {
           .invokeMethod('updateFloatingActionType', {'actionType': actionType});
     } catch (e) {
       print('Error updating floating action type: $e');
-    }
-  }
-
-  // Translation and grammar methods (called from native)
-  Future<String> translateText({
-    required String text,
-    required String sourceLang,
-    required String targetLang,
-  }) async {
-    try {
-      final result = await platform.invokeMethod('translateText', {
-        'text': text,
-        'sourceLang': sourceLang,
-        'targetLang': targetLang,
-      });
-      return result as String;
-    } catch (e) {
-      print('Error translating text: $e');
-      return 'Translation error';
-    }
-  }
-
-  Future<String> checkGrammar({
-    required String text,
-    required String language,
-  }) async {
-    try {
-      final result = await platform.invokeMethod('checkGrammar', {
-        'text': text,
-        'language': language,
-      });
-      return result as String;
-    } catch (e) {
-      print('Error checking grammar: $e');
-      return 'Grammar check error';
     }
   }
 }
