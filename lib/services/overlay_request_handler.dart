@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 
 import '../constants/languages.dart';
@@ -41,6 +43,7 @@ class OverlayRequestHandler {
     final arguments = Map<String, dynamic>.from(call.arguments as Map);
     final action = arguments['action']?.toString();
     final text = (arguments['text'] ?? '').toString();
+    final audioPath = arguments['audioPath']?.toString();
 
     if (action == null) {
       throw PlatformException(
@@ -59,6 +62,8 @@ class OverlayRequestHandler {
         case 'grammar':
           _requireText(text);
           return await _handleGrammar(text);
+        case 'voice_translate':
+          return await _handleVoiceTranslate(audioPath);
         default:
           throw PlatformException(
             code: 'unknown_action',
@@ -124,6 +129,84 @@ class OverlayRequestHandler {
       'sourceLang': resolvedSource,
       'targetLang': targetCode,
     };
+  }
+
+  /// Hold-to-speak: recorded audio in, a message in the parent's chosen
+  /// language out.
+  ///
+  /// The spoken language is never asked for. Saaras returns the language it
+  /// heard, so the parent can speak English or Kannada into the same button and
+  /// still get the target language they picked in Settings.
+  Future<Map<String, dynamic>> _handleVoiceTranslate(String? audioPath) async {
+    if (audioPath == null || audioPath.trim().isEmpty) {
+      throw PlatformException(
+        code: 'invalid_arguments',
+        message: 'No recording was captured. Hold the button and speak.',
+      );
+    }
+
+    final targetName = _storage.getTargetLanguage();
+    final targetCode = Languages.codeFor(targetName);
+    if (targetCode == null) {
+      throw PlatformException(
+        code: 'unsupported_language',
+        message:
+            '$targetName is not supported. Pick another language in Settings.',
+      );
+    }
+
+    // `transcribe` keeps the words in the language they were spoken in.
+    // `translate` would force everything to English, which is wrong the moment
+    // the parent picks any other target language.
+    final heard = await _sarvam.speechToText(
+      audioFile: File(audioPath),
+      mode: SaarasMode.transcribe,
+    );
+    final spoken = heard.transcript.trim();
+    final sourceCode = _resolveSpokenLanguage(heard.languageCode);
+
+    // Already in the target language: don't pay for a round trip that would
+    // only paraphrase what they said.
+    if (sourceCode == targetCode) {
+      return {
+        'action': 'voice_translate',
+        'success': true,
+        'resultText': spoken,
+        'transcript': spoken,
+        'sourceLang': sourceCode,
+        'targetLang': targetCode,
+        'translated': false,
+      };
+    }
+
+    final translated = await _sarvam.translate(
+      input: spoken,
+      sourceLanguageCode: sourceCode,
+      targetLanguageCode: targetCode,
+    );
+
+    return {
+      'action': 'voice_translate',
+      'success': true,
+      'resultText': translated,
+      'transcript': spoken,
+      'sourceLang': sourceCode,
+      'targetLang': targetCode,
+      'translated': true,
+    };
+  }
+
+  /// Maps what Saaras reports back onto a code Mayura accepts.
+  ///
+  /// Saaras can return `unknown`, or a language Mayura does not take. Sending
+  /// `auto` in those cases is better than sending a code that 400s.
+  String _resolveSpokenLanguage(String reported) {
+    final code = reported.trim();
+    if (code.isEmpty || code.toLowerCase() == 'unknown') return 'auto';
+    final known = Languages.all.any(
+      (language) => language.code.toLowerCase() == code.toLowerCase(),
+    );
+    return known ? code : 'auto';
   }
 
   Future<Map<String, dynamic>> _handleGrammar(String text) async {

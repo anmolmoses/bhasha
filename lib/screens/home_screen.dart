@@ -110,7 +110,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // Step 3: Start the overlay service
+      // Step 3: Ask for the microphone, used by hold-to-speak.
+      // Deliberately not a gate: tap-to-translate works without it, so a parent
+      // who declines still gets a working bubble.
+      if (!await _platform.checkMicPermission()) {
+        await _platform.requestMicPermission();
+      }
+
+      // Step 4: Start the overlay service
       final started = await _platform.startOverlayService();
       if (started) {
         setState(() => _bubbleActive = true);

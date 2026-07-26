@@ -77,6 +77,60 @@ class BhashaAccessibilityService : AccessibilityService() {
         return success
     }
 
+    /**
+     * Appends [newText] to the focused input field and leaves the cursor at the
+     * end.
+     *
+     * Dictation appends rather than replaces on purpose: the parent may have
+     * already typed part of the message, and losing it to a voice action they
+     * are still learning to trust would be unrecoverable.
+     */
+    fun insertTextInFocusedField(newText: String): Boolean {
+        val rootNode = rootInActiveWindow ?: return false
+        val focusedNode = findFocusedEditText(rootNode)
+
+        val success = if (focusedNode != null) {
+            val existing = focusedNode.text?.toString().orEmpty()
+            val combined = if (existing.isBlank()) {
+                newText
+            } else {
+                "${existing.trimEnd()} $newText"
+            }
+
+            val setTextArguments = android.os.Bundle()
+            setTextArguments.putCharSequence(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                combined
+            )
+            val wrote = focusedNode.performAction(
+                AccessibilityNodeInfo.ACTION_SET_TEXT,
+                setTextArguments
+            )
+
+            if (wrote) {
+                // Put the caret after what we just added so the parent can keep
+                // typing without hunting for the end of the line.
+                val caret = android.os.Bundle()
+                caret.putInt(
+                    AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT,
+                    combined.length
+                )
+                caret.putInt(
+                    AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT,
+                    combined.length
+                )
+                focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, caret)
+            }
+            wrote
+        } else {
+            false
+        }
+
+        focusedNode?.recycle()
+        rootNode.recycle()
+        return success
+    }
+
     private fun findFocusedEditText(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         // First check if current node is focused and editable
         if (node.isFocused && node.isEditable) {

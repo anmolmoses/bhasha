@@ -161,7 +161,9 @@ class OneTapHero extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Type in any app, tap the floating bubble — your text translates instantly!',
+              'In any app: tap the bubble to translate what you typed, or '
+              'hold it and speak — your words land in the message box in the '
+              'language you picked.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.white.withOpacity(0.95),
                     height: 1.4,

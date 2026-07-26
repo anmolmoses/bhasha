@@ -106,6 +106,21 @@ Android does not allow apps to enable overlay or accessibility access silently. 
 
 Some apps expose editable text differently to Android accessibility services. Automatic reading or replacement may therefore vary by app.
 
+### Speak a message in another app
+
+1. Open an editable field in an app such as WhatsApp, Messages, or email, and tap into it.
+2. **Press and hold** the Bhasha bubble. It turns red and shows "Listening…".
+3. Speak in whichever language you like — the app detects it, you do not select it.
+4. Release the button.
+5. What you said is transcribed, translated into the **target language** set in Bhasha, and appended to the message box.
+
+Notes:
+
+- Recording stops automatically at 28 seconds, because Sarvam's speech endpoint rejects anything over 30. The status pill counts down from 20 seconds so a long message is never lost silently.
+- Speech already in the target language is inserted as transcribed, with no translation round trip.
+- Dictated text is **appended** to whatever is already in the field, so holding the bubble never destroys something you typed.
+- The recording is written to the app cache and deleted as soon as the request finishes, whether it succeeded or failed.
+
 ### Generate replies for a post on X
 
 1. In Bhasha settings, select **X Replies** as the one-tap action.
@@ -142,6 +157,8 @@ OpenAI API usage is billed to the account associated with the API key. The key i
 | Display over other apps | Show the draggable floating assistant |
 | Foreground service | Keep the overlay available outside Bhasha |
 | Accessibility service | Read and replace text in the focused editable field |
+| Microphone | Record speech while the bubble is held down |
+| Microphone foreground service | Capture audio from the overlay service on Android 14 and newer |
 | Input method service | Register the custom Bhasha keyboard |
 | Accessibility screenshot capability | Capture the visible screen for X reply suggestions on Android 11 or newer |
 

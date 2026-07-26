@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:bhasha/constants/languages.dart';
 import 'package:bhasha/models/sarvam_error.dart';
@@ -291,6 +293,108 @@ void main() {
     test('reverse lookup returns the display name', () {
       expect(Languages.nameFor('kn-IN'), 'Kannada');
       expect(Languages.nameFor('zz-IN'), 'zz-IN');
+    });
+  });
+
+  group('speech to text upload', () {
+    late Directory tempDir;
+
+    setUp(() => tempDir = Directory.systemTemp.createTempSync('bhasha_stt'));
+    tearDown(() => tempDir.deleteSync(recursive: true));
+
+    /// A WAV-shaped file of [bytes] length. Contents are zeroed so the
+    /// multipart body stays readable in assertions.
+    File fakeWav(String name, int bytes) {
+      final file = File('${tempDir.path}/$name')
+        ..writeAsBytesSync(Uint8List(bytes));
+      return file;
+    }
+
+    test('posts multipart audio to /speech-to-text with the pinned model',
+        () async {
+      late http.Request captured;
+      final service = serviceReturning(
+        jsonEncode({'transcript': 'hello', 'language_code': 'en-IN'}),
+        onRequest: (r) => captured = r,
+      );
+
+      await service.speechToText(
+        audioFile: fakeWav('clip.wav', 4096),
+        mode: SaarasMode.transcribe,
+      );
+
+      expect(captured.url.path, '/speech-to-text');
+      expect(captured.method, 'POST');
+      expect(captured.headers['api-subscription-key'], 'test-key');
+      expect(captured.body, contains('saaras:v3'));
+      expect(captured.body, contains('transcribe'));
+    });
+
+    test('omits language_code so Saaras detects what was spoken', () async {
+      late http.Request captured;
+      final service = serviceReturning(
+        jsonEncode({'transcript': 'hello', 'language_code': 'en-IN'}),
+        onRequest: (r) => captured = r,
+      );
+
+      await service.speechToText(audioFile: fakeWav('clip.wav', 4096));
+
+      expect(captured.body, isNot(contains('language_code')));
+    });
+
+    test('returns the language Saaras heard, not the one we guessed', () async {
+      final service = serviceReturning(
+        jsonEncode({'transcript': 'ನಾನು ಬರುತ್ತೇನೆ', 'language_code': 'kn-IN'}),
+      );
+
+      final result = await service.speechToText(
+        audioFile: fakeWav('clip.wav', 4096),
+      );
+
+      expect(result.languageCode, 'kn-IN');
+      expect(result.transcript, 'ನಾನು ಬರುತ್ತೇನೆ');
+    });
+
+    test('a header-only recording fails before any network call', () async {
+      var called = false;
+      final client = MockClient((_) async {
+        called = true;
+        return http.Response('{}', 200);
+      });
+      final service =
+          SarvamService(client: client, keyProvider: () async => 'test-key');
+
+      await expectLater(
+        service.speechToText(audioFile: fakeWav('silent.wav', 44)),
+        throwsA(isA<SarvamException>()
+            .having((e) => e.kind, 'kind', SarvamErrorKind.noSpeechDetected)),
+      );
+      expect(called, isFalse, reason: 'no round trip for an empty recording');
+    });
+
+    test('a missing recording reports no speech rather than crashing', () {
+      final service = serviceReturning('{}');
+      expect(
+        service.speechToText(audioFile: File('${tempDir.path}/gone.wav')),
+        throwsA(isA<SarvamException>()
+            .having((e) => e.kind, 'kind', SarvamErrorKind.noSpeechDetected)),
+      );
+    });
+
+    test('a blank transcript is treated as nothing heard', () {
+      final service = serviceReturning(
+        jsonEncode({'transcript': '   ', 'language_code': 'en-IN'}),
+      );
+      expect(
+        service.speechToText(audioFile: fakeWav('clip.wav', 4096)),
+        throwsA(isA<SarvamException>()
+            .having((e) => e.kind, 'kind', SarvamErrorKind.noSpeechDetected)),
+      );
+    });
+
+    test('the client-side audio ceiling stays under the documented 30s', () {
+      expect(
+          SarvamService.maxRestAudioDuration.inSeconds, lessThanOrEqualTo(30));
     });
   });
 }
