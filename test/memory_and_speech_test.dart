@@ -235,6 +235,37 @@ void main() {
     });
   });
 
+  group('bulbul wire format', () {
+    test('the speaker id goes out lowercase, whatever the profile shows', () async {
+      // Sarvam rejects 'Kavya' with HTTP 400 but accepts 'kavya'; seen on a
+      // real device, so pinned here.
+      String? sentSpeaker;
+      final client = MockClient((request) async {
+        sentSpeaker = (jsonDecode(request.body) as Map)['speaker'] as String?;
+        return http.Response(
+          jsonEncode({'audios': ['UklGRg==']}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      final service =
+          SarvamService(client: client, keyProvider: () async => 'test-key');
+
+      await service.textToSpeech(
+        text: 'ನಾಳೆ ಬರುತ್ತೇನೆ',
+        targetLanguageCode: 'kn-IN',
+        speaker: 'Kavya',
+      );
+
+      expect(sentSpeaker, 'kavya');
+    });
+
+    test('a stored speaker that is no longer offered falls back', () {
+      final profile = ParentProfile.fromJson({'voiceSpeaker': 'Kavitha'});
+      expect(profile.voiceSpeaker, ParentProfile.defaultSpeaker);
+    });
+  });
+
   group('wav duration parsing', () {
     Uint8List wavOf({required int byteRate, required int dataBytes}) {
       final bytes = Uint8List(44 + dataBytes);

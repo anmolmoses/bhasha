@@ -309,7 +309,9 @@ class SarvamService {
           'text': chunk,
           'target_language_code': targetLanguageCode,
           'model': ttsModel,
-          'speaker': speaker,
+          // Bulbul rejects 'Kavya' but accepts 'kavya': speaker ids are
+          // lowercase on the wire even though we display them capitalised.
+          'speaker': speaker.toLowerCase(),
           'pace': pace.clamp(0.5, 2.0),
         },
         'text-to-speech',
