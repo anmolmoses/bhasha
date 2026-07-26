@@ -1,8 +1,8 @@
 # Bhasha
 
-Bhasha is an Android writing assistant built with Flutter and native Kotlin. It can translate text, correct grammar, and suggest replies for posts on X using your own OpenAI API key.
+Bhasha is an Android writing assistant built with Flutter and native Kotlin. It can translate text, correct grammar, and turn speech into a message in the language you choose, using your own Sarvam API key.
 
-Its primary experience is a draggable, system-wide floating bubble. From another app, tap the bubble to process the focused text field or capture the visible screen for reply suggestions.
+Its primary experience is a draggable, system-wide floating bubble. From another app, tap the bubble to process the focused text field, or hold it to speak.
 
 ## What Bhasha does
 
@@ -13,12 +13,12 @@ Its primary experience is a draggable, system-wide floating bubble. From another
 - Correct grammar, spelling, and punctuation.
 - Copy translated or corrected text to the clipboard.
 - Configure default source and target languages.
-- Store the OpenAI API key securely on the device.
+- Store the Sarvam API key securely on the device.
 - Configure and control the Android floating assistant.
 
 ### From the floating assistant
 
-The bubble can be assigned one of three actions in **Settings → One-Tap Action**:
+The bubble can be assigned one of two actions in **Settings → One-Tap Action**:
 
 1. **Translate**
 
@@ -28,17 +28,7 @@ The bubble can be assigned one of three actions in **Settings → One-Tap Action
 
    Reads the focused text, corrects it in the configured target language, and replaces the original text.
 
-3. **X Replies**
-
-   Captures the visible screen, asks OpenAI to infer the post being viewed, and displays copyable reply suggestions in an overlay.
-
-X reply suggestions can be customized by:
-
-- Tone: Warm, Smart, Funny, or Direct
-- Length: Very short, Short, Medium, or Detailed
-- Number of suggestions
-- Emoji preference
-- Custom style instructions
+Holding the bubble records speech and appends the result to the focused field, whichever action is selected.
 
 ## Current implementation status
 
@@ -48,9 +38,9 @@ X reply suggestions can be customized by:
 | In-app grammar correction | Implemented |
 | One-tap overlay translation | Implemented |
 | One-tap overlay grammar correction | Implemented |
-| Screenshot-based X reply suggestions | Implemented |
+| Hold-to-speak voice translation | Implemented |
 | Custom Android keyboard/IME | Scaffolded |
-| Keyboard Translate and Grammar actions | Not yet connected to OpenAI |
+| Keyboard Translate and Grammar actions | Not yet connected to Sarvam |
 
 The custom keyboard is registered with Android and includes a QWERTY layout and action toolbar, but its Translate and Grammar handlers are currently placeholders. The floating assistant is the complete system-wide workflow.
 
@@ -59,11 +49,10 @@ The custom keyboard is registered with Android and includes a QWERTY layout and 
 - Flutter SDK with Dart 3 support
 - Android SDK 35
 - Android 7.0 (API 24) or newer
-- Android 11 (API 30) or newer for X reply screenshot capture
 - An Android device or emulator
-- An OpenAI API key with available API usage
+- A Sarvam API key
 
-Bhasha is currently Android-only. The overlay, accessibility service, screen capture, and IME are implemented in native Kotlin.
+Bhasha is currently Android-only. The overlay, accessibility service, microphone capture, and IME are implemented in native Kotlin.
 
 ## Getting started
 
@@ -83,7 +72,7 @@ flutter build apk --debug
 On first launch:
 
 1. Choose the default source and target languages.
-2. Add an OpenAI API key.
+2. Add a Sarvam API key.
 3. Finish onboarding.
 4. Open **Settings** to configure the floating assistant.
 
@@ -94,7 +83,7 @@ Android does not allow apps to enable overlay or accessibility access silently. 
 1. Open Bhasha and go to **Settings**.
 2. Under **One-Tap Translation**, grant **Overlay Permission**.
 3. Grant access to the **Bhasha Accessibility Service**.
-4. Choose Translate, Grammar, or X Replies as the **One-Tap Action**.
+4. Choose Translate or Grammar as the **One-Tap Action**.
 5. Turn on **Floating bubble active**.
 
 ### Translate or correct text in another app
@@ -121,31 +110,22 @@ Notes:
 - Dictated text is **appended** to whatever is already in the field, so holding the bubble never destroys something you typed.
 - The recording is written to the app cache and deleted as soon as the request finishes, whether it succeeded or failed.
 
-### Generate replies for a post on X
+## Sarvam integration
 
-1. In Bhasha settings, select **X Replies** as the one-tap action.
-2. Configure the reply tone, length, count, emoji preference, and optional instructions.
-3. Open a post on X.
-4. Tap the floating bubble.
-5. Tap a generated suggestion to copy it.
+Bhasha sends requests directly from the device to the Sarvam API. Sarvam is the only inference provider; there is no fallback. It currently uses:
 
-The X Replies action requires Android 11 or newer. It processes the visible screenshot through the enabled accessibility service, so review the screen for sensitive information before using it.
+- `/speech-to-text` (`saaras:v3`) for hold-to-speak transcription
+- `/translate` (`mayura:v1`) for translation
+- `/text-lid` for source-language detection
+- `/v1/chat/completions` (`sarvam-105b`) for grammar correction
 
-## OpenAI integration
-
-Bhasha sends requests directly from the device to the OpenAI API. It currently uses:
-
-- The Responses API for translation, grammar correction, language detection, and screenshot-based reply suggestions
-- `gpt-5-mini-2025-08-07`
-- A Chat Completions fallback for text-only requests
-
-OpenAI API usage is billed to the account associated with the API key. The key is not included in the repository.
+Sarvam API usage is billed to the account associated with the API key. The key is not included in the repository.
 
 ## Privacy and permissions
 
 ### Local data
 
-- The OpenAI API key is stored with `flutter_secure_storage`.
+- The Sarvam API key is stored with `flutter_secure_storage`.
 - Language and style preferences are stored locally with `shared_preferences`.
 - Secrets should never be committed to the repository.
 
@@ -153,16 +133,15 @@ OpenAI API usage is billed to the account associated with the API key. The key i
 
 | Permission or service | Why it is needed |
 | --- | --- |
-| Internet | Send requests to the OpenAI API |
+| Internet | Send requests to the Sarvam API |
 | Display over other apps | Show the draggable floating assistant |
 | Foreground service | Keep the overlay available outside Bhasha |
 | Accessibility service | Read and replace text in the focused editable field |
 | Microphone | Record speech while the bubble is held down |
 | Microphone foreground service | Capture audio from the overlay service on Android 14 and newer |
 | Input method service | Register the custom Bhasha keyboard |
-| Accessibility screenshot capability | Capture the visible screen for X reply suggestions on Android 11 or newer |
 
-The accessibility service is used when the user taps the floating bubble; it is not intended to continuously collect typed text. Translation, grammar, and screenshot content selected for processing is sent to OpenAI.
+The accessibility service is used when the user taps or holds the floating bubble; it is not intended to continuously collect typed text. Bhasha does not request the accessibility screenshot capability, so no screen pixels ever leave the device. Text selected for processing, and speech recorded while the bubble is held, are sent to Sarvam.
 
 ## Architecture
 
@@ -170,7 +149,7 @@ The accessibility service is used when the user taps the floating bubble; it is 
 Flutter
 ├── Screens and widgets
 ├── Secure key and preference storage
-├── OpenAI request and response handling
+├── Sarvam request and response handling
 └── Platform service and overlay request handler
              │
              │ MethodChannel
@@ -179,19 +158,20 @@ Native Android (Kotlin)
 ├── MainActivity
 ├── OverlayService
 ├── BhashaAccessibilityService
+├── VoiceCaptureManager
 └── CustomKeyboardIME
 ```
 
-Flutter owns the app UI, settings, storage coordination, and OpenAI requests. Kotlin owns Android-specific permissions, services, overlays, accessibility operations, screen capture, and IME behavior.
+Flutter owns the app UI, settings, storage coordination, and Sarvam requests. Kotlin owns Android-specific permissions, services, overlays, accessibility operations, microphone capture, and IME behavior.
 
 ## Repository layout
 
 ```text
 lib/
 ├── constants/     Supported languages
-├── models/        Translation, grammar, mode, and reply-style models
+├── models/        Translation, grammar, mode, voice, and profile models
 ├── screens/       Onboarding, home, and settings
-├── services/      OpenAI, storage, platform-channel, and overlay coordination
+├── services/      Sarvam, storage, platform-channel, and overlay coordination
 ├── theme/         Material 3 theme
 └── widgets/       Reusable UI components
 
@@ -201,6 +181,7 @@ android/app/src/main/
 │   ├── MainActivity.kt
 │   ├── OverlayService.kt
 │   ├── BhashaAccessibilityService.kt
+│   ├── VoiceCaptureManager.kt
 │   └── CustomKeyboardIME.kt
 └── res/           Keyboard, accessibility, and Android UI resources
 ```
@@ -215,7 +196,7 @@ flutter analyze
 flutter test
 ```
 
-The repository does not currently contain a `test/` directory, so add tests before expecting `flutter test` to run a suite.
+`test/` covers Sarvam response parsing, typed errors, request-size chunking, the language table, and the voice-translate path.
 
 For changes to Kotlin, the Android manifest, platform channels, overlay behavior, accessibility behavior, or the IME, also run:
 
@@ -228,7 +209,7 @@ flutter build apk --debug
 - Android is the only supported platform.
 - Overlay and accessibility access require manual approval in Android settings.
 - One-tap text replacement depends on the target app exposing an editable accessibility node.
-- X reply suggestions require Android 11 or newer and send the captured image to OpenAI.
+- Hold-to-speak is capped at 28 seconds, because Sarvam's REST speech endpoint rejects audio over 30.
 - The custom keyboard's AI actions are not implemented yet.
 - The release build currently uses debug signing and is not configured for Play Store distribution.
 
