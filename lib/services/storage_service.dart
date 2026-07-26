@@ -21,6 +21,7 @@ class StorageService {
   static const String _grammarCheckEnabledKey = 'grammar_check_enabled';
   static const String _firstTimeSetupKey = 'first_time_setup';
   static const String _autoDetectKey = 'auto_detect_language';
+  static const String _autoFlipKey = 'auto_flip_language_pair';
   static const String _floatingActionKey = 'floating_action_type';
   static const String _speakAloudKey = 'speak_translations_enabled';
 
@@ -110,6 +111,18 @@ class StorageService {
 
   bool getAutoDetect() {
     return _prefs?.getBool(_autoDetectKey) ?? false;
+  }
+
+  // Auto-flip between the two working languages
+  Future<void> saveAutoFlip(bool enabled) async {
+    await _prefs?.setBool(_autoFlipKey, enabled);
+  }
+
+  /// On by default: the common case is a parent moving between the same two
+  /// languages all day, and having to open Settings to reverse the direction
+  /// was the reason they left the app they were in.
+  bool getAutoFlip() {
+    return _prefs?.getBool(_autoFlipKey) ?? true;
   }
 
   // First Time Setup

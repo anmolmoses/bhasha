@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import '../constants/languages.dart';
+
 typedef MethodHandler = Future<dynamic> Function(MethodCall call);
 
 class PlatformService {
@@ -130,6 +132,32 @@ class PlatformService {
           .invokeMethod('updateFloatingActionType', {'actionType': actionType});
     } catch (e) {
       print('Error updating floating action type: $e');
+    }
+  }
+
+  /// Hands the bubble everything it needs to draw its own language chip and
+  /// picker.
+  ///
+  /// The overlay runs with no Dart isolate guaranteed to be alive, so it cannot
+  /// ask for this on demand — it has to be pushed down whenever the app changes
+  /// it, and read from native preferences from then on.
+  Future<void> syncLanguageSettings({
+    required String sourceLanguage,
+    required String targetLanguage,
+    required bool autoFlip,
+  }) async {
+    try {
+      await platform.invokeMethod('syncLanguageSettings', {
+        'catalog': [
+          for (final language in Languages.all)
+            '${language.code}|${language.name}|${language.shortLabel}',
+        ],
+        'sourceLanguage': sourceLanguage,
+        'targetLanguage': targetLanguage,
+        'autoFlip': autoFlip,
+      });
+    } catch (e) {
+      print('Error syncing language settings: $e');
     }
   }
 

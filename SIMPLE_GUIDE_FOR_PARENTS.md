@@ -41,6 +41,17 @@ First, ask your family to turn on "Double-tap screen translation" in Settings (o
 
 Sometimes this takes a few seconds — that's normal, just wait.
 
+Type in English instead, and the same button gives you Kannada. You never have
+to tell it which way round — it works that out from what you typed.
+
+## Want a different language?
+
+Look at the small dark chip just under the blue button. It says something like
+**KN⇄EN**. That is your language pair.
+
+**Tap the chip** and a list opens right there, on top of WhatsApp. Pick the
+language you want and carry on. You never have to leave the app you are in.
+
 ## That's It!
 
 ### Before (Old Way - Too Hard!)

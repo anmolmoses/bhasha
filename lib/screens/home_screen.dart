@@ -234,6 +234,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
     _storage.saveSourceLanguage(_sourceLang);
     _storage.saveTargetLanguage(_targetLang);
+    _pushLanguagesToOverlay();
+  }
+
+  /// Keeps the bubble's language chip showing what the app just saved.
+  Future<void> _pushLanguagesToOverlay() {
+    return _platform.syncLanguageSettings(
+      sourceLanguage: _sourceLang,
+      targetLanguage: _targetLang,
+      autoFlip: _storage.getAutoFlip(),
+    );
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -717,6 +727,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _storage.saveTargetLanguage(selected);
         }
       });
+      _pushLanguagesToOverlay();
     }
   }
 }

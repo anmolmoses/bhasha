@@ -4,6 +4,46 @@
 
 Bhasha is your personal language assistant that helps you translate text between languages and check grammar/spelling. It's designed specifically for users who know one language well (like Kannada) but struggle to express it in another (like English).
 
+The default pair is Kannada ⇄ English. The Sarvam key is encrypted in Android
+secure storage and is never included in the app source code.
+
+## Change language without leaving the app you are in
+
+You do not have to go back to Bhasha to switch languages.
+
+### Auto-flip does most of it for you
+
+Your two languages are a pair, not a fixed direction. Bhasha listens to what
+you actually wrote or said and gives you the other one:
+
+- Type Kannada in the WhatsApp box, tap the bubble, get English.
+- Type English in the same box, tap the bubble, get Kannada.
+- Hold the bubble and speak either language, get the other one.
+
+Nothing to switch, nothing to remember. A message in some third language still
+comes back in your target language, because that is the one you read.
+
+To pin a single direction instead, turn off **Settings → Auto-flip between
+these two**.
+
+### The chip under the bubble
+
+A small chip sits under the floating bubble and always shows where you stand:
+
+- `KN⇄EN` means auto-flip is on between Kannada and English.
+- `→EN` means everything goes into English, whatever you write.
+
+Tap the chip and a language list opens on top of whatever app you are in.
+Pick a language, and it takes effect on your very next tap. Tap outside the
+list to close it without changing anything.
+
+The chip hides itself while you are recording speech, and while Bhasha is
+taking a screenshot for screen translation.
+
+Screen translation (double tap) always shows the screen in your target
+language. There is no direction to flip there, because the text is someone
+else's.
+
 ## Getting Started
 
 ### First Launch

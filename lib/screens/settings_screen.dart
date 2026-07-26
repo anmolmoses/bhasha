@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late String _sourceLang;
   late String _targetLang;
   late bool _autoDetect;
+  late bool _autoFlip;
   String? _apiKey;
   bool _overlayServiceRunning = false;
   bool _overlayPermissionGranted = false;
@@ -66,14 +67,29 @@ class _SettingsScreenState extends State<SettingsScreen>
       setState(() {
         _overlayPermissionGranted = overlayGranted;
         _accessibilityEnabled = accessibilityEnabled;
+        // The parent may have changed language from the bubble while this
+        // screen sat in the background. Show what the bubble is using, not
+        // what was loaded when the screen opened.
+        _sourceLang = _storage.getSourceLanguage();
+        _targetLang = _storage.getTargetLanguage();
+        _autoFlip = _storage.getAutoFlip();
       });
     }
+  }
+
+  Future<void> _pushLanguagesToOverlay() {
+    return _platform.syncLanguageSettings(
+      sourceLanguage: _sourceLang,
+      targetLanguage: _targetLang,
+      autoFlip: _autoFlip,
+    );
   }
 
   Future<void> _loadSettings() async {
     _sourceLang = _storage.getSourceLanguage();
     _targetLang = _storage.getTargetLanguage();
     _autoDetect = _storage.getAutoDetect();
+    _autoFlip = _storage.getAutoFlip();
     _floatingActionType = _storage.getFloatingActionType();
     _speakAloud = _storage.getSpeakAloud();
     _profile = await _profileService.load();
@@ -594,8 +610,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionHeader(
-            headline: 'Default Languages',
-            subtitle: 'Defaults used when the app launches.',
+            headline: 'Your Languages',
+            subtitle: 'Also changeable from the bubble, without leaving an app.',
           ),
           const SizedBox(height: 18),
           LanguagePicker(
@@ -604,6 +620,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             onLanguageSelected: (lang) async {
               await _storage.saveSourceLanguage(lang);
               setState(() => _sourceLang = lang);
+              await _pushLanguagesToOverlay();
             },
           ),
           const SizedBox(height: 12),
@@ -613,6 +630,18 @@ class _SettingsScreenState extends State<SettingsScreen>
             onLanguageSelected: (lang) async {
               await _storage.saveTargetLanguage(lang);
               setState(() => _targetLang = lang);
+              await _pushLanguagesToOverlay();
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildSwitchRow(
+            title: 'Auto-flip between these two',
+            subtitle: 'Write in either language and get the other one back',
+            value: _autoFlip,
+            onChanged: (value) async {
+              await _storage.saveAutoFlip(value);
+              setState(() => _autoFlip = value);
+              await _pushLanguagesToOverlay();
             },
           ),
           const SizedBox(height: 12),

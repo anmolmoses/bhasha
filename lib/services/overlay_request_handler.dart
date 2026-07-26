@@ -86,6 +86,7 @@ class OverlayRequestHandler {
       );
     }
 
+    await _adoptOverlayLanguageChoice(arguments);
     await _ensureApiKey();
 
     try {
@@ -164,15 +165,42 @@ class OverlayRequestHandler {
     }
   }
 
-  Future<Map<String, dynamic>> _handleTranslate(
-    String text, {
-    required String action,
-    String? sourcePackage,
-  }) async {
-    final sourceName = _storage.getSourceLanguage();
-    final targetName = _storage.getTargetLanguage();
-    final autoDetect = _storage.getAutoDetect();
+  /// Takes on the language the parent picked from the bubble's chip.
+  ///
+  /// The bubble owns that choice while they are inside another app, and sends
+  /// it with every request. Writing it back here keeps the in-app Settings
+  /// screen showing what the bubble is actually using, so the two surfaces
+  /// never disagree.
+  Future<void> _adoptOverlayLanguageChoice(
+    Map<String, dynamic> arguments,
+  ) async {
+    final source = arguments['sourceLanguage']?.toString();
+    if (source != null &&
+        Languages.isSupported(source) &&
+        source != _storage.getSourceLanguage()) {
+      await _storage.saveSourceLanguage(source);
+    }
 
+    final target = arguments['targetLanguage']?.toString();
+    if (target != null &&
+        Languages.isSupported(target) &&
+        target != _storage.getTargetLanguage()) {
+      await _storage.saveTargetLanguage(target);
+    }
+
+    final autoFlip = arguments['autoFlip'];
+    if (autoFlip is bool && autoFlip != _storage.getAutoFlip()) {
+      await _storage.saveAutoFlip(autoFlip);
+    }
+  }
+
+  /// The parent's two working languages.
+  ///
+  /// With auto-flip on the pair has no fixed direction: whichever side the text
+  /// is *not* in is the side it goes to. That is what stops a parent leaving
+  /// WhatsApp to reverse the direction between one message and the next.
+  LanguagePair _languagePair() {
+    final targetName = _storage.getTargetLanguage();
     final targetCode = Languages.codeFor(targetName);
     if (targetCode == null) {
       throw PlatformException(
@@ -181,22 +209,50 @@ class OverlayRequestHandler {
             '$targetName is not supported. Pick another language in Settings.',
       );
     }
+    final sourceCode =
+        Languages.codeFor(_storage.getSourceLanguage()) ??
+        Languages.defaultSourceCode;
 
-    var sourceCode = Languages.codeFor(sourceName);
-    if (autoDetect) {
-      try {
-        final detected = await _sarvam.identifyLanguage(text);
-        if (detected.languageCode != null) {
-          sourceCode = detected.languageCode;
-        }
-      } on SarvamException {
-        // Detection is best-effort; fall back to the saved language rather
-        // than failing the whole translation.
-      }
+    return LanguagePair(
+      sourceCode: sourceCode,
+      targetCode: targetCode,
+      // A pair of one language has no other side to flip to.
+      autoFlip:
+          _storage.getAutoFlip() &&
+          !Languages.sameLanguage(sourceCode, targetCode),
+    );
+  }
+
+  /// Best-effort language identification. Returns null rather than failing the
+  /// whole action, so a detection outage degrades to the saved direction.
+  Future<String?> _detectLanguage(String text) async {
+    try {
+      final detected = await _sarvam.identifyLanguage(text);
+      return detected.languageCode;
+    } on SarvamException {
+      return null;
     }
+  }
 
+  Future<Map<String, dynamic>> _handleTranslate(
+    String text, {
+    required String action,
+    String? sourcePackage,
+  }) async {
+    final pair = _languagePair();
+    final autoDetect = _storage.getAutoDetect();
+
+    // Auto-flip has to know what it is looking at, so it detects even when the
+    // parent left auto-detect off.
+    final detected = (pair.autoFlip || autoDetect)
+        ? await _detectLanguage(text)
+        : null;
+
+    final sourceCode =
+        detected ?? Languages.codeFor(_storage.getSourceLanguage());
     // Mayura accepts `auto`, which is a better default than guessing wrong.
     final resolvedSource = sourceCode ?? 'auto';
+    final targetCode = pair.resolveTarget(detected);
 
     final translated = await _sarvam.translate(
       input: text,
@@ -233,15 +289,7 @@ class OverlayRequestHandler {
       );
     }
 
-    final targetName = _storage.getTargetLanguage();
-    final targetCode = Languages.codeFor(targetName);
-    if (targetCode == null) {
-      throw PlatformException(
-        code: 'unsupported_language',
-        message:
-            '$targetName is not supported. Pick another language in Settings.',
-      );
-    }
+    final pair = _languagePair();
 
     // `transcribe` keeps the words in the language they were spoken in.
     // `translate` would force everything to English, which is wrong the moment
@@ -252,6 +300,11 @@ class OverlayRequestHandler {
     );
     final spoken = heard.transcript.trim();
     final sourceCode = _resolveSpokenLanguage(heard.languageCode);
+
+    // Saaras already told us what was spoken, so auto-flip costs nothing here:
+    // speak English and get Kannada, speak Kannada and get English, from the
+    // same button and without touching a setting.
+    final targetCode = pair.resolveTarget(sourceCode);
 
     // Already in the target language: don't pay for a round trip that would
     // only paraphrase what they said.
@@ -303,7 +356,14 @@ class OverlayRequestHandler {
   }
 
   Future<Map<String, dynamic>> _handleGrammar(String text) async {
-    final language = _storage.getTargetLanguage();
+    // Grammar has no direction to flip, but it does have a language, and
+    // assuming the target one is wrong the moment a parent writes in the other
+    // half of their pair. Read what they actually typed instead.
+    var language = _storage.getTargetLanguage();
+    if (_storage.getAutoFlip()) {
+      final detected = await _detectLanguage(text);
+      if (detected != null) language = Languages.nameFor(detected);
+    }
     final profile = _profileService.profile;
 
     final systemPrompt = StringBuffer()
@@ -547,5 +607,32 @@ class OverlayRequestHandler {
         'Add your Sarvam API key in Bhasha settings before using the bubble.',
       ),
     );
+  }
+}
+
+/// The two languages the parent works between, and whether the direction is
+/// fixed or resolved per message.
+@visibleForTesting
+class LanguagePair {
+  const LanguagePair({
+    required this.sourceCode,
+    required this.targetCode,
+    required this.autoFlip,
+  });
+
+  final String sourceCode;
+  final String targetCode;
+  final bool autoFlip;
+
+  /// Which side [detectedCode] should be translated into.
+  ///
+  /// Text already in the target language goes back to the other side. Anything
+  /// outside the pair — a Hindi message in a Kannada/English pair — still goes
+  /// to the target, because that is the language the parent reads.
+  String resolveTarget(String? detectedCode) {
+    if (!autoFlip || detectedCode == null) return targetCode;
+    return Languages.sameLanguage(detectedCode, targetCode)
+        ? sourceCode
+        : targetCode;
   }
 }
