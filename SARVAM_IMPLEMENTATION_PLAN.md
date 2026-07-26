@@ -37,7 +37,13 @@ One does not.
 | 3 | `checkGrammar()` — GPT prompt, corrected text | Bubble "grammar" action | `POST /v1/chat/completions` (`sarvam-105b`) | **Clean.** Same shape (system + user → text), OpenAI-compatible response envelope. |
 | 4 | `suggestXReplies()` — **vision** call over a base64 screenshot | Bubble "x_replies" action, `BhashaAccessibilityService.takeScreenshotBase64` | **No direct equivalent.** See §1.2. | **Blocked.** |
 
-### 1.2 The one real gap: no vision model
+### 1.2 The one real gap: no vision model — resolved by cutting the feature
+
+> **Decision made (26 July 2026): X replies is out of scope, permanently.** Option 2
+> below was taken. `suggestXReplies`, `takeScreenshotBase64`, the `x_replies` settings
+> block, and the `canTakeScreenshot` accessibility capability are all removed. The
+> remaining paragraphs in this section are kept as the rationale for that call.
+
 
 Sarvam's chat completion API documents `sarvam-30b` (64K) and `sarvam-105b` (128K).
 **Neither documents image input.** There is no multimodal endpoint in the Sarvam API
@@ -57,10 +63,9 @@ Three options, in the order I'd recommend them:
 3. **Keep OpenAI solely for this one feature.** Contradicts the instruction to replace
    OpenAI. Not recommended.
 
-**Recommendation: option 1**, with option 2 as the fallback if time runs short.
-Either way the screenshot path stops being load-bearing, which is a privacy win.
-
-> **Decision needed from you.** Everything else in this plan is unblocked.
+Option 2 was taken. The screenshot path is gone entirely, which is a privacy win:
+no screen pixels ever leave the device, and the app no longer declares the
+accessibility screenshot capability at all.
 
 ---
 
@@ -242,7 +247,7 @@ Not required for the MVP. Useful later if a parent types romanized Kannada.
 | **4. Reply from context** | `/speech-to-text` `mode=translate` → `/v1/chat/completions` (context resolves "that day") → native `ACTION_SET_TEXT` |
 | **Legacy: text translate** (existing bubble tap) | `/text-lid` (when auto-detect on) → `/translate` |
 | **Legacy: grammar check** | `/v1/chat/completions` |
-| **Legacy: X replies** | **blocked — see §1.2** |
+| **Legacy: X replies** | **cut — see §1.2** |
 | **Key connection check** | cheapest call: `/translate` with a 2-char input |
 
 ---
@@ -398,7 +403,7 @@ be per-endpoint, not global, so this doesn't bite later.
 
 | Risk | Mitigation |
 |---|---|
-| No vision model (§1.2) | Decision needed; recommend accessibility-text rewrite |
+| No vision model (§1.2) | Closed: X-replies cut, screenshot path removed |
 | `dict_id` creation API unconfirmed (§2.6) | Scheduled last; prompt-level glossary fallback |
 | Demo wifi latency | `sarvam-30b` fallback; latency shown honestly on evidence screen |
 | Accessibility reads wrong message | Prefer selected text; **fail loudly** rather than read the wrong chat |
@@ -439,7 +444,7 @@ Unit tests, no live API — `http.Client` injected and mocked.
 
 ## 9. Open decisions
 
-1. **X-replies (§1.2)** — rewrite on accessibility text *(recommended)*, cut, or keep OpenAI for it alone?
+1. ~~**X-replies (§1.2)**~~ — **closed.** Cut from scope entirely; see §1.2.
 2. **Sarvam API key** — needed for any live verification. Not in the repo, correctly.
 3. **Physical Android device** — `adb devices` is currently empty. The APK will build,
    but no on-device claim (WhatsApp field replacement, mic capture, playback

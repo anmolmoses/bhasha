@@ -50,7 +50,7 @@ The app must never send a message automatically. The parent remains in control.
 ### 2. Understand an incoming message
 
 1. The parent taps the bubble while viewing an English message.
-2. Bhasha gets the selected or most relevant visible message using the accessibility service or the existing screenshot path.
+2. Bhasha gets the selected or most relevant visible message using the accessibility service. There is no screenshot path: the app does not declare the screenshot capability, so no screen pixels ever leave the device.
 3. It translates the message into simple, conversational Kannada.
 4. Bulbul reads the Kannada aloud at the parent's saved pace.
 5. The overlay shows a short Kannada transcript and three large actions: **Stop**, **Ask**, and **Reply**.
@@ -288,7 +288,7 @@ This vertical slice is the non-negotiable demo.
 
 ### 2:15–3:30 — Incoming message understanding
 
-- Reuse accessibility or screenshot infrastructure to capture explicitly requested context.
+- Reuse accessibility infrastructure to capture explicitly requested context.
 - Translate to simple Kannada.
 - Generate Kannada speech with Bulbul.
 - Implement playback, stop, and interruption.
@@ -448,7 +448,7 @@ The repository currently has:
 - Flutter UI, storage, OpenAI services, and overlay request coordination.
 - MainActivity.kt with the existing MethodChannel.
 - OverlayService.kt with the floating bubble and actions.
-- BhashaAccessibilityService.kt with focused editable-field discovery, ACTION_SET_TEXT replacement, and screenshot support.
+- BhashaAccessibilityService.kt with focused editable-field discovery and ACTION_SET_TEXT replacement.
 - A scaffolded CustomKeyboardIME.kt.
 
 Reuse these pieces. Do not create competing method-channel names or duplicate services without a strong reason.
@@ -502,8 +502,7 @@ The incoming-message pipeline must:
 
 - prefer explicitly selected accessibility text;
 - otherwise conservatively choose the most relevant visible readable message;
-- use the existing screenshot path only when text nodes are insufficient and the user explicitly requests it;
-- fail clearly rather than reading the wrong conversation;
+- fail clearly rather than reading the wrong conversation, since there is no screenshot fallback;
 - translate into simple conversational Kannada;
 - speak and display the result;
 - support immediate stop/interruption;
