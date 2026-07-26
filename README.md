@@ -30,6 +30,8 @@ The bubble can be assigned one of two actions in **Settings → One-Tap Action**
 
 Holding the bubble records speech and appends the result to the focused field, whichever action is selected.
 
+**Double-tapping** the bubble translates everything visible on screen and draws the result over the original text. It is off by default; enable it in **Settings → Double-tap screen translation**.
+
 ## Current implementation status
 
 | Surface | Status |
@@ -39,6 +41,7 @@ Holding the bubble records speech and appends the result to the focused field, w
 | One-tap overlay translation | Implemented |
 | One-tap overlay grammar correction | Implemented |
 | Hold-to-speak voice translation | Implemented |
+| Double-tap screen translation | Implemented |
 | Custom Android keyboard/IME | Scaffolded |
 | Keyboard Translate and Grammar actions | Not yet connected to Sarvam |
 
@@ -110,6 +113,24 @@ Notes:
 - Dictated text is **appended** to whatever is already in the field, so holding the bubble never destroys something you typed.
 - The recording is written to the app cache and deleted as soon as the request finishes, whether it succeeded or failed.
 
+### Translate a whole screen
+
+1. Enable **Double-tap screen translation** in Settings and accept the disclosure.
+2. Open any app.
+3. **Double-tap** the Bhasha bubble.
+4. Read the white cards drawn over the original text. Tap anywhere to dismiss.
+
+Bhasha reads the screen two ways, and prefers the first:
+
+1. **Android Accessibility.** Exact text and bounds, no screen capture, and a result in about a second. This is what runs on a WhatsApp conversation.
+2. **Sarvam Vision OCR.** Used only when the accessibility tree yields nothing readable. Android asks for screen-capture consent, one frame is captured in memory, and it is sent to Sarvam Vision as a document-digitization job. This path takes roughly 10-25 seconds.
+
+Notes:
+
+- The screenshot is never written to disk, and capture stops after the single frame.
+- Sarvam Vision is a document model. It reads flat, document-like screens well, but a screen drawn over a photo background is detected as one picture region and described rather than transcribed — which is why the accessibility path is tried first.
+- Icons, the status bar, badge counts, and opaque identifiers are filtered out rather than translated.
+
 ## Sarvam integration
 
 Bhasha sends requests directly from the device to the Sarvam API. Sarvam is the only inference provider; there is no fallback. It currently uses:
@@ -118,6 +139,7 @@ Bhasha sends requests directly from the device to the Sarvam API. Sarvam is the 
 - `/translate` (`mayura:v1`) for translation
 - `/text-lid` for source-language detection
 - `/v1/chat/completions` (`sarvam-105b`) for grammar correction
+- `/doc-digitization/job/v1` (`sarvam-vision`) for screen OCR, only as the fallback described above
 
 Sarvam API usage is billed to the account associated with the API key. The key is not included in the repository.
 
@@ -136,12 +158,16 @@ Sarvam API usage is billed to the account associated with the API key. The key i
 | Internet | Send requests to the Sarvam API |
 | Display over other apps | Show the draggable floating assistant |
 | Foreground service | Keep the overlay available outside Bhasha |
-| Accessibility service | Read and replace text in the focused editable field |
+| Accessibility service | Read and replace text in the focused editable field, and read visible text for screen translation |
+| Screen capture (MediaProjection) | Capture one frame for the screen-translation OCR fallback, after Android's own consent prompt |
+| Media projection foreground service | Hold that single capture while it is encoded |
 | Microphone | Record speech while the bubble is held down |
 | Microphone foreground service | Capture audio from the overlay service on Android 14 and newer |
 | Input method service | Register the custom Bhasha keyboard |
 
-The accessibility service is used when the user taps or holds the floating bubble; it is not intended to continuously collect typed text. Bhasha does not request the accessibility screenshot capability, so no screen pixels ever leave the device. Text selected for processing, and speech recorded while the bubble is held, are sent to Sarvam.
+The accessibility service is used when the user taps, holds, or double-taps the floating bubble; it is not intended to continuously collect typed text. Bhasha does not request the accessibility screenshot capability.
+
+Screen pixels leave the device in exactly one case: double-tap screen translation, when the accessibility tree cannot read the screen and the OCR fallback runs. That path is off by default, requires a separate in-app disclosure, and still needs Android's own screen-capture prompt each time. One frame is captured in memory, sent to Sarvam, and never written to disk. Everything else — text selected for processing, speech recorded while the bubble is held, and text read for screen translation — is sent to Sarvam as text.
 
 ## Architecture
 
@@ -149,7 +175,7 @@ The accessibility service is used when the user taps or holds the floating bubbl
 Flutter
 ├── Screens and widgets
 ├── Secure key and preference storage
-├── Sarvam request and response handling
+├── Sarvam request and response handling (translation, speech, OCR)
 └── Platform service and overlay request handler
              │
              │ MethodChannel

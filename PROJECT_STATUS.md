@@ -1,4 +1,10 @@
-# Project Status: COMPLETE ✅
+# Project Status: Historical Snapshot
+
+> This file records the original OpenAI-era implementation. It is not the
+> current source of truth. Bhasha now uses Sarvam for language work, OpenAI
+> only for opt-in screen OCR, and includes universal double-tap screen
+> translation plus contextual translation. See `README.md`,
+> `WHATSAPP_CONTEXTUAL_TRANSLATE.html`, and `USER_GUIDE.md` for current status.
 
 ## Implementation Date
 

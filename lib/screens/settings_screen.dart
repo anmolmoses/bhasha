@@ -27,6 +27,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _overlayServiceRunning = false;
   bool _overlayPermissionGranted = false;
   bool _accessibilityEnabled = false;
+  bool _contextualTranslateEnabled = false;
+  bool _screenTranslationEnabled = false;
   String _floatingActionType = 'translate';
 
   @override
@@ -73,6 +75,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     // Check permissions
     _overlayPermissionGranted = await _platform.checkOverlayPermission();
     _accessibilityEnabled = await _platform.checkAccessibilityPermission();
+    _contextualTranslateEnabled =
+        await _platform.checkContextualTranslateEnabled();
+    _screenTranslationEnabled = await _platform.checkScreenTranslationEnabled();
 
     if (mounted) setState(() {});
   }
@@ -92,6 +97,115 @@ class _SettingsScreenState extends State<SettingsScreen>
     } else {
       await _platform.stopOverlayService();
       setState(() => _overlayServiceRunning = false);
+    }
+  }
+
+  Future<void> _toggleContextualTranslate(bool value) async {
+    if (!value) {
+      final updated = await _platform.setContextualTranslateEnabled(false);
+      if (updated && mounted) {
+        setState(() => _contextualTranslateEnabled = false);
+      }
+      return;
+    }
+
+    final consented = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.translate_rounded),
+            title: const Text('Translate selected messages across apps'),
+            content: const Text(
+              'Bhasha uses Android Accessibility to identify visible text you '
+              'explicitly long-press in supported messaging and social apps, '
+              'then places a Translate button beside it.\n\n'
+              'Only after you tap Translate is that selected message sent to '
+              'the Sarvam API. Bhasha does not continuously upload or store '
+              'your conversations. Password fields and Android system screens '
+              'are excluded.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Agree & enable'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!consented) return;
+
+    final updated = await _platform.setContextualTranslateEnabled(true);
+    if (!updated || !mounted) return;
+    setState(() => _contextualTranslateEnabled = true);
+
+    if (!_accessibilityEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enable Bhasha Accessibility to use contextual translation.',
+          ),
+        ),
+      );
+      await _platform.requestAccessibilityPermission();
+    }
+  }
+
+  Future<void> _toggleScreenTranslation(bool value) async {
+    if (!value) {
+      final updated = await _platform.setScreenTranslationEnabled(false);
+      if (updated && mounted) {
+        setState(() => _screenTranslationEnabled = false);
+      }
+      return;
+    }
+
+    if (_apiKey == null || _apiKey!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Save your Sarvam API key first.'),
+        ),
+      );
+      return;
+    }
+
+    final consented = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.document_scanner_outlined),
+            title: const Text('Enable double-tap screen translation?'),
+            content: const Text(
+              'When you double-tap the Bhasha bubble, Android will ask for '
+              'screen-capture permission. Bhasha captures one screenshot and '
+              'sends it to Sarvam Vision to read visible text and its '
+              'position, then translates that text with Sarvam.\n\n'
+              'Reading the screen runs as a Sarvam job and usually takes '
+              '10-25 seconds. The screenshot is not saved by Bhasha, and '
+              'capture stops immediately after that one frame.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Agree & enable'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!consented) return;
+
+    final updated = await _platform.setScreenTranslationEnabled(true);
+    if (updated && mounted) {
+      setState(() => _screenTranslationEnabled = true);
     }
   }
 
@@ -168,6 +282,60 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
           const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.28),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.fullscreen_rounded,
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Double-tap screen translation',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Double-tap the bubble to read the current screen with '
+                        'Sarvam Vision and overlay Sarvam translations.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch.adaptive(
+                  value: _screenTranslationEnabled,
+                  onChanged: _toggleScreenTranslation,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 18),
 
           // Permission Status
           _buildPermissionStatus(
@@ -179,18 +347,91 @@ class _SettingsScreenState extends State<SettingsScreen>
               await _platform.requestOverlayPermission();
               await Future.delayed(const Duration(milliseconds: 500));
               final granted = await _platform.checkOverlayPermission();
+              if (!mounted) return;
               setState(() => _overlayPermissionGranted = granted);
             },
           ),
           const SizedBox(height: 12),
           _buildPermissionStatus(
             title: 'Accessibility Service',
-            subtitle: 'Required for auto text detection',
+            subtitle:
+                'Required for selected-message detection and text actions',
             isEnabled: _accessibilityEnabled,
             icon: Icons.accessibility_new,
             onRequest: () async {
               await _platform.requestAccessibilityPermission();
             },
+          ),
+
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.success.withOpacity(0.28),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: AppColors.success,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Contextual translate across apps',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Long-press accessible message text to show a Sarvam '
+                            'Translate action beside it.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch.adaptive(
+                      value: _contextualTranslateEnabled,
+                      onChanged: _toggleContextualTranslate,
+                    ),
+                  ],
+                ),
+                if (_contextualTranslateEnabled && !_accessibilityEnabled) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Waiting for Bhasha Accessibility to be enabled.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ],
+            ),
           ),
 
           const SizedBox(height: 18),
@@ -216,7 +457,11 @@ class _SettingsScreenState extends State<SettingsScreen>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.gesture, color: AppColors.primary, size: 20),
+                    const Icon(
+                      Icons.gesture,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'One-Tap Action',
@@ -228,7 +473,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Choose what happens when you tap the floating button.',
+                  'Single tap uses this action. Double tap always translates '
+                  'the visible screen.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -585,26 +831,27 @@ class _SettingsScreenState extends State<SettingsScreen>
   void _confirmClearData() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Clear all Bhasha data?'),
         content: const Text(
           'This removes your API key, language selections, and saved preferences.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
               await _storage.clearAll();
-              if (mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All settings cleared.')),
-                );
-                _loadSettings();
-              }
+              await _platform.setContextualTranslateEnabled(false);
+              await _platform.setScreenTranslationEnabled(false);
+              if (!mounted || !dialogContext.mounted) return;
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('All settings cleared.')),
+              );
+              _loadSettings();
             },
             style: TextButton.styleFrom(foregroundColor: AppColors.accent),
             child: const Text('Clear'),

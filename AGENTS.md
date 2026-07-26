@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Bhasha is a Flutter Android app for translation and grammar checking using the OpenAI API. It has two main Android integration surfaces:
+Bhasha is a Flutter Android app for translation and grammar checking using the Sarvam API. It has two main Android integration surfaces:
 
 - A system-wide floating overlay button.
 - A custom Android keyboard/IME.
@@ -14,7 +14,7 @@ Keep Flutter responsible for the app UI, settings, API-key flow, and service coo
 - `lib/main.dart` - Flutter entrypoint.
 - `lib/screens/` - Main app screens, onboarding, home, and settings.
 - `lib/widgets/` - Reusable Flutter UI components.
-- `lib/services/` - Storage, OpenAI API calls, platform-channel wrappers, and overlay request handling.
+- `lib/services/` - Storage, Sarvam API calls, platform-channel wrappers, and overlay request handling.
 - `lib/models/` - Data models and app mode enums.
 - `lib/theme/` - App theme.
 - `lib/constants/` - Static app constants such as languages.
@@ -44,7 +44,7 @@ flutter build apk --debug
 - Follow the existing Flutter structure and Material 3 style.
 - Prefer small, focused widgets over large screen-level methods when UI grows.
 - Keep API-key material in secure storage; do not log secrets.
-- Keep OpenAI request and response parsing in `lib/services/openai_service.dart` unless a broader service split is needed.
+- Keep Sarvam request and response parsing in `lib/services/sarvam_service.dart` (and `sarvam_vision_service.dart` for screen OCR) unless a broader service split is needed.
 - Use method channels through the existing platform service layer rather than adding direct platform calls from screens.
 - Preserve the existing lint posture in `analysis_options.yaml`.
 - Use concise comments only where platform behavior or permission flow is not obvious.

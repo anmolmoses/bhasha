@@ -40,6 +40,45 @@ class BhashaAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Reads the visible text of the foreground app straight from the
+     * accessibility tree, for double-tap screen translation.
+     *
+     * Preferred over the Sarvam Vision screenshot path wherever it works: it
+     * needs no screen capture, returns exact bounds, and answers in
+     * milliseconds instead of the ~15s a digitization job takes. It is also
+     * the only thing that reads a WhatsApp chat, whose wallpaper makes the
+     * document model treat the whole conversation as one picture.
+     *
+     * Returns an empty list when the tree yields nothing usable, so the caller
+     * can fall back to OCR.
+     */
+    fun collectScreenTextNodes(): List<ScreenTextNode> {
+        val root = rootInActiveWindow ?: return emptyList()
+        return try {
+            val ownPackage = packageName?.toString().orEmpty()
+            val sourcePackage = root.packageName?.toString().orEmpty()
+            if (sourcePackage.isEmpty() || sourcePackage == ownPackage) {
+                return emptyList()
+            }
+
+            val nodes =
+                if (WhatsAppUiAdapter.isWhatsAppPackage(sourcePackage) &&
+                    WhatsAppUiAdapter.isConversation(root)
+                ) {
+                    WhatsAppUiAdapter.visibleMessageTextNodes(root)
+                } else {
+                    GenericMessagingUiAdapter.visibleTextNodes(root)
+                }
+
+            // Identical labels can repeat across rows; keep the first.
+            val seen = mutableSetOf<String>()
+            nodes.filter { seen.add(it.text.lowercase()) }
+        } finally {
+            root.recycle()
+        }
+    }
+
+    /**
      * Get text from the currently focused input field
      */
     fun getTextFromFocusedField(): String? {

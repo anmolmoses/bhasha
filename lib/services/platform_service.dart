@@ -132,4 +132,52 @@ class PlatformService {
       print('Error updating floating action type: $e');
     }
   }
+
+  Future<bool> checkContextualTranslateEnabled() async {
+    try {
+      final result =
+          await platform.invokeMethod('checkContextualTranslateEnabled');
+      return result as bool;
+    } catch (e) {
+      print('Error checking contextual translation setting: $e');
+      return false;
+    }
+  }
+
+  Future<bool> setContextualTranslateEnabled(bool enabled) async {
+    try {
+      final result = await platform.invokeMethod(
+        'setContextualTranslateEnabled',
+        {'enabled': enabled},
+      );
+      return result as bool;
+    } catch (e) {
+      print('Error updating contextual translation setting: $e');
+      return false;
+    }
+  }
+
+  Future<bool> checkScreenTranslationEnabled() async {
+    try {
+      final result =
+          await platform.invokeMethod('checkScreenTranslationEnabled');
+      return result as bool;
+    } catch (e) {
+      print('Error checking screen translation setting: $e');
+      return false;
+    }
+  }
+
+  Future<bool> setScreenTranslationEnabled(bool enabled) async {
+    try {
+      final result = await platform.invokeMethod(
+        'setScreenTranslationEnabled',
+        {'enabled': enabled},
+      );
+      return result as bool;
+    } catch (e) {
+      print('Error updating screen translation setting: $e');
+      return false;
+    }
+  }
 }

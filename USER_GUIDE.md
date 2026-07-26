@@ -1,337 +1,172 @@
 # Bhasha User Guide
 
-## Introduction
+## First setup
 
-Bhasha is your personal language assistant that helps you translate text between languages and check grammar/spelling. It's designed specifically for users who know one language well (like Kannada) but struggle to express it in another (like English).
+1. Open Bhasha.
+2. Create a subscription key at `dashboard.sarvam.ai`.
+3. Paste the key into Bhasha and verify it.
+4. Choose the language you know and the language you want.
+5. Complete onboarding.
 
-## Getting Started
+The default pair is Kannada → English. The Sarvam key is encrypted in Android
+secure storage and is never included in the app source code.
 
-### First Launch
+## Translate everything visible on a screen
 
-1. **Welcome Screen**: Learn about Bhasha features
-2. **Choose Languages**:
-   - Source Language: The language you're comfortable with (e.g., Kannada)
-   - Target Language: The language you want to translate to (e.g., English)
-3. **Enter API Key**: Paste your OpenAI API key
-4. **Complete Setup**: Tap "Get Started"
+### Setup
 
-### Getting an OpenAI API Key
+1. Open **Bhasha → Settings**.
+2. Save your Sarvam API key.
+3. Turn on **Double-tap screen translation**.
+4. Read the disclosure and tap **Agree & enable**.
+5. Grant overlay permission and turn on the floating bubble.
 
-1. Visit https://platform.openai.com
-2. Sign up or log in
-3. Go to API Keys section
-4. Click "Create new secret key"
-5. Copy the key (it starts with "sk-")
-6. Paste it in the app
+### Use
 
-**Important**: Keep your API key private. Don't share it with anyone.
+1. Open WhatsApp or another app with readable text.
+2. Double-tap the floating Bhasha bubble.
+3. Approve Android's screen-capture prompt if Bhasha asks for one.
+4. Wait while Bhasha reads the visible text and Sarvam translates it.
+5. Read the white labels placed over the original text.
+6. Tap anywhere to close the translated screen.
 
-## Choosing a Mode
+Where Android Accessibility can read the screen, Bhasha uses it and captures
+nothing at all. Otherwise it captures one frame per double tap and does not
+save it. Sarvam performs all reading and translation.
 
-Bhasha offers two ways to use it:
+## Translate inside Bhasha
 
-### 1. Floating Button Mode (Recommended for Beginners)
+1. Open the Bhasha home screen.
+2. Choose source and target languages.
+3. Type or paste text.
+4. Tap **Translate**.
+5. Review or copy the Sarvam result.
 
-**What it is**: A small button that floats on top of all your apps.
+When auto-detect is enabled, Bhasha asks Sarvam to identify the source language
+before translating. If detection fails, it uses the saved source language.
 
-**How to use**:
+## Translate editable text in any app
 
-1. Open Bhasha app
-2. Go to Settings (gear icon)
-3. Select "Floating Button" mode
-4. Grant permission when asked
-5. Toggle "Floating Button Active" to ON
+### Setup
 
-**Using the floating button**:
+1. Open **Bhasha → Settings → One-Tap Translation**.
+2. Grant **Overlay Permission**.
+3. Enable **Bhasha Accessibility** in Android Settings.
+4. Set the One-Tap Action to **Translate**.
+5. Turn on **Floating bubble active**.
 
-- The button appears as a "T" icon
-- Drag it anywhere on screen
-- Tap it to open translation dialog
-- Type or paste text
-- Choose "Translate" or "Check Grammar"
-- Copy the result
+### Use
 
-**Speaking instead of typing**:
+1. Open an editable field in WhatsApp, Messages, email, Notes, or another app.
+2. Type text and keep the field focused.
+3. Tap the floating `T`.
+4. Wait for Bhasha to replace the editable text with the translation.
 
-- Press and hold the button instead of tapping it
-- It turns red and shows "Listening…"
-- Speak in any language — you do not have to tell Bhasha which one
-- Let go, and your words appear in the message box in your chosen target language
-- Recording stops on its own after 28 seconds, so nothing is lost
-- Whatever you had already typed stays; the spoken part is added to the end
+Choose Grammar instead of Translate to correct the focused text with Sarvam.
 
-The first time you hold the button, Android asks for microphone permission. Bhasha opens itself to show that prompt; grant it, then hold the button again.
+## Translate existing text across apps
 
-**Best for**: Quick translations while using other apps
+This is different from translating text you are typing. Bhasha shows its own
+temporary action beside text you explicitly long-press; it never edits the
+original content.
 
-### 2. Custom Keyboard Mode (Advanced)
+### Enable it
 
-**What it is**: A keyboard that replaces your default keyboard with translation features built-in.
+1. Open **Bhasha → Settings → One-Tap Translation**.
+2. Turn on **Contextual translate across apps**.
+3. Read the disclosure explaining accessibility and Sarvam data use.
+4. Tap **Agree & enable**.
+5. Enable Bhasha Accessibility if prompted.
 
-**How to use**:
+The feature is off by default and can be turned off at any time.
 
-1. Open Bhasha app
-2. Go to Settings
-3. Select "Custom Keyboard" mode
-4. Tap "Open Keyboard Settings"
-5. Enable "Bhasha Keyboard" in Android settings
-6. Select it as your active keyboard
+### Use it
 
-**Using the keyboard**:
+1. Open a messaging or social app.
+2. Long-press the text message you want to translate.
+3. Tap the Bhasha **Translate** chip.
+4. Review the **Translated by Sarvam** card.
+5. Select:
+   - **Copy** to copy the result.
+   - **Insert in reply** to place it in an exposed editable composer.
+   - **Close** to dismiss it.
 
-- Type normally on the keyboard
-- Use toolbar buttons:
-  - "Translate": Converts your text to target language
-  - "Grammar": Checks and corrects your text
-- Text is replaced automatically
+The chip may appear below, across the edge of, or above the selected message so
+it does not cover the app's composer or nearby text.
 
-**Best for**: Extended typing sessions, messaging apps
+### When the chip will disappear
 
-## Using Translation
+Bhasha removes the contextual action when:
 
-### In the App
+- You scroll.
+- You leave the source screen or app.
+- The selected message moves and cannot be matched safely.
+- You disable contextual translation.
+- Android disables the accessibility service.
 
-1. Open Bhasha
-2. Go to "Translate" tab
-3. Select source and target languages
-4. Type or paste your text
-5. Tap "Translate"
-6. Copy the result if needed
+Bhasha does not guess which message to translate.
 
-**Example**:
+## Supported languages
 
-- Source (Kannada): "ನನಗೆ ಅರ್ಥವಾಗುತ್ತಿಲ್ಲ"
-- Target (English): "I don't understand"
-
-### With Floating Button
-
-1. Copy text from any app
-2. Tap the floating button
-3. Paste the text
-4. Tap "Translate"
-5. Copy the result back to your app
-
-### With Keyboard
-
-1. Type your text in any app
-2. Tap "Translate" button on keyboard toolbar
-3. Your text is automatically replaced
-
-## Using Grammar Check
-
-### In the App
-
-1. Open Bhasha
-2. Go to "Grammar Check" tab
-3. Select the language
-4. Type or paste your text
-5. Tap "Check Grammar"
-6. See the corrected version
-
-**Example**:
-
-- Original: "I goes to school everyday"
-- Corrected: "I go to school every day"
-
-### Tips for Better Results
-
-1. **Be specific**: Clearer text gets better translations
-2. **Short sentences**: Break long paragraphs into sentences
-3. **Context matters**: Add context for ambiguous words
-4. **Check results**: AI isn't perfect, review the output
-
-## Managing Settings
-
-### Languages
-
-**Change Source Language**:
-
-1. Settings > Language Preferences
-2. Tap "Source Language"
-3. Select from 35+ languages
-
-**Change Target Language**:
-
-1. Settings > Language Preferences
-2. Tap "Target Language"
-3. Select your preferred language
-
-**Swap Languages**:
-
-- In Translate tab, tap the swap icon (⇄)
-
-**Auto-detect Language**:
-
-- Enable in Settings to automatically detect source language
-
-### API Key
-
-**Update API Key**:
-
-1. Settings > API Configuration
-2. Enter new key
-3. Tap "Save API Key"
-
-**Security**: Keys are encrypted and stored only on your device
-
-### Mode Switching
-
-You can switch between modes anytime:
-
-1. Go to Settings
-2. Select Mode Selection
-3. Choose your preferred mode
-4. Follow setup instructions
-
-## Common Use Cases
-
-### For Parents (Like Your Use Case!)
-
-**Scenario**: You want to write a message to your child's teacher in English.
-
-**Solution**:
-
-1. Write in Kannada (or your language)
-2. Use floating button or keyboard to translate
-3. Copy the English text
-4. Send the message
-
-### WhatsApp Messages
-
-1. Open WhatsApp
-2. If using floating button:
-   - Write in your language
-   - Copy text
-   - Tap floating button
-   - Translate
-   - Paste back to WhatsApp
-3. If using keyboard:
-   - Switch to Bhasha keyboard
-   - Type and tap "Translate"
-
-### Email Writing
-
-1. Write email in your comfortable language
-2. Translate it to English
-3. Use grammar check to ensure correctness
-4. Send with confidence
-
-### Learning
-
-Use Bhasha to:
-
-- See how phrases translate
-- Learn correct grammar
-- Improve your English over time
-
-## Supported Languages
-
-### Indian Languages
-
-- Kannada, Hindi, Tamil, Telugu, Bengali
-- Marathi, Gujarati, Punjabi, Malayalam, Urdu
-
-### European Languages
-
-- English, Spanish, French, German, Italian
-- Portuguese, Russian, Dutch, Swedish, Polish
-
-### Asian Languages
-
-- Chinese, Japanese, Korean, Thai, Vietnamese
-
-### Others
-
-- Arabic, Hebrew, Turkish, Greek, Indonesian
-- And more!
-
-## Tips & Tricks
-
-1. **Quick Access**: Keep floating button on for instant access
-2. **Offline Note**: App needs internet for translation
-3. **Save Common Phrases**: Use notes app to save frequent translations
-4. **Multiple Languages**: Change languages anytime
-5. **Grammar First**: For English text, check grammar before sending
-
-## Troubleshooting
-
-### "No internet connection"
-
-- Check your WiFi or mobile data
-- Try opening a web browser to verify
-
-### "API Error"
-
-- Check if your API key is correct
-- Verify you have credits on OpenAI account
-- Try again in a few seconds
-
-### "Permission denied"
-
-- Go to Android Settings > Apps > Bhasha
-- Grant required permissions
-
-### Floating button disappeared
-
-- Go to Settings
-- Toggle "Floating Button Active" off and on
-
-### Keyboard not working
-
-- System Settings > Languages & input
-- Ensure Bhasha Keyboard is enabled
-- Switch to it in keyboard selector
-
-### Translation seems wrong
-
-- Try rephrasing your source text
-- Add more context
-- Break into smaller sentences
-- Remember AI can make mistakes
+Kannada, English, Hindi, Tamil, Telugu, Malayalam, Marathi, Bengali, Gujarati,
+Punjabi, Odia, Assamese, Urdu, Nepali, Konkani, Kashmiri, Sindhi, Sanskrit,
+Santali, Manipuri, Bodo, Maithili, and Dogri.
 
 ## Privacy
 
-- Your API key stays on your device
-- No data is stored or sent to Bhasha servers
-- Translations are sent only to OpenAI
-- No translation history is kept
-- You can delete all data anytime in Settings
+- Opening or scrolling an app does not send anything to Sarvam.
+- Only the message you explicitly select and translate is transmitted.
+- Bhasha does not save chat text, contact names, screenshots, or translation
+  history.
+- For double-tap screen translation, a screenshot is sent to Sarvam Vision only
+  when the accessibility tree cannot read the screen.
+- The Sarvam subscription key stays in secure storage.
+- Insert in reply always requires a separate tap.
+- You can turn off contextual translation or Android Accessibility at any time.
 
-## Costs
+## Troubleshooting
 
-- App is free to use
-- OpenAI API charges per use:
-  - Very affordable: ~$0.002 per 1000 words
-  - Example: 500 translations ≈ $0.10-$0.50
-- Monitor usage on OpenAI dashboard
-- Set spending limits if needed
+### The contextual Translate chip does not appear
 
-## Best Practices
+- Confirm **Contextual translate across apps** is enabled in Bhasha Settings.
+- Confirm Bhasha Accessibility is enabled in Android Settings.
+- Long-press a normal text message, not an image-only message, sticker, or voice
+  note.
+- Password fields, image-only content, stickers, and voice notes are excluded.
+- Some apps do not expose message text to Android Accessibility.
 
-1. **Start Simple**: Try the app mode first before floating button
-2. **Learn Gradually**: Use it daily, you'll improve
-3. **Review Results**: Always read the translation
-4. **Keep Key Safe**: Store API key securely
-5. **Update Regularly**: Keep app updated for best performance
+### Double-tap screen translation does not start
 
-## Support
+- Save your Sarvam API key in Bhasha Settings.
+- Enable **Double-tap screen translation** and the floating bubble.
+- Tap twice quickly without moving the bubble.
+- Approve the Android capture prompt.
+- Secure banking, media, or password screens may intentionally capture blank.
 
-If you need help:
+### Translation says a Sarvam key is missing or invalid
 
-1. Re-read this guide
-2. Check SETUP.md for technical issues
-3. Ask family member to help with setup
-4. Contact app developer
+- Open Bhasha Settings.
+- Paste a valid subscription key from `dashboard.sarvam.ai`.
+- Use the key verification control before returning to WhatsApp.
 
-## Feedback
+### The message moved
 
-Your experience matters! Share:
+Scroll or incoming messages can invalidate the temporary anchor. Long-press the
+message again; Bhasha intentionally refuses to translate an ambiguous row.
 
-- What works well
-- What's confusing
-- Feature requests
-- Language-specific issues
+### Insert in reply does not work
 
----
+- Make sure the source app's editable composer is visible.
+- Close any attachment, emoji, or search panel.
+- Tap **Insert in reply** again.
 
-**Made with ❤️ to help bridge language barriers**
+### The general floating bubble is missing
+
+- Grant Display over other apps permission.
+- Turn **Floating bubble active** off and back on.
+- Check vendor battery/background restrictions for Bhasha.
+
+### The custom keyboard buttons do not translate
+
+The keyboard is currently scaffolding. Use the in-app workspace, general
+floating bubble, or contextual Translate action.

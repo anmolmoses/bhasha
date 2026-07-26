@@ -77,7 +77,7 @@ When you tap the blue "T" button:
 ## For Children/Family: How to Help Setup
 
 1. Install Bhasha app
-2. Enter OpenAI API key (in settings)
+2. Enter Sarvam API key (in settings)
 3. Select: Kannada → English
 4. Turn ON "Overlay bubble"
 5. **Enable accessibility service** (most important!)

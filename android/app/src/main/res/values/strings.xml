@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Bhasha</string>
-    <string name="accessibility_service_description">Bhasha uses this service to automatically translate and replace text in input fields with one tap. Your text is only sent to OpenAI for translation and is not stored or shared.</string>
+    <string name="accessibility_service_description">Bhasha uses Android Accessibility to translate editable text and, when you enable contextual translation, identify visible non-password text you explicitly long-press in supported apps and place a Translate action beside it. Only text you explicitly translate is sent to the Sarvam API. Bhasha does not store your conversations.</string>
 </resources>

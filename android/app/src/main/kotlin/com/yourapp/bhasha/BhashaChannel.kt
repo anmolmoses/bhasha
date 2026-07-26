@@ -30,6 +30,11 @@ import java.lang.ref.WeakReference
  */
 object BhashaChannel {
 
+    private const val NATIVE_PREFS = "bhasha_native_preferences"
+    private const val SCREEN_TRANSLATION_ENABLED = "screen_translation_enabled"
+    private const val CONTEXTUAL_ENABLED = "whatsapp_contextual_enabled"
+
+
     const val CHANNEL = "com.yourapp.bhasha/native"
     const val OVERLAY_PERMISSION_REQUEST = 1001
     const val MIC_PERMISSION_REQUEST = 1002
@@ -83,6 +88,8 @@ object BhashaChannel {
         action: String,
         text: String,
         audioPath: String? = null,
+        imageBase64: String? = null,
+        blocks: List<Map<String, Any?>>? = null,
         callback: (success: Boolean, data: Map<String, Any?>?, error: String?) -> Unit
     ) {
         val target = channel
@@ -94,7 +101,13 @@ object BhashaChannel {
         mainHandler.post {
             target.invokeMethod(
                 "processOverlayAction",
-                hashMapOf("action" to action, "text" to text, "audioPath" to audioPath),
+                hashMapOf(
+                    "action" to action,
+                    "text" to text,
+                    "audioPath" to audioPath,
+                    "imageBase64" to imageBase64,
+                    "blocks" to blocks,
+                ),
                 object : MethodChannel.Result {
                     override fun success(result: Any?) {
                         val map = (result as? Map<*, *>)?.mapNotNull { entry ->
@@ -119,6 +132,56 @@ object BhashaChannel {
             )
         }
     }
+
+    /** Screenshot OCR through Sarvam Vision, then translation. */
+    fun processScreenTranslation(
+        imageBase64: String,
+        callback: (success: Boolean, data: Map<String, Any?>?, error: String?) -> Unit
+    ) = processOverlayAction(
+        action = "screen_translate",
+        text = "",
+        imageBase64 = imageBase64,
+        callback = callback,
+    )
+
+    /**
+     * Translates text already read from the accessibility tree, skipping OCR.
+     * [blocks] carry text plus 0-1000 normalised geometry.
+     */
+    fun processScreenTextBlocks(
+        blocks: List<Map<String, Any?>>,
+        callback: (success: Boolean, data: Map<String, Any?>?, error: String?) -> Unit
+    ) = processOverlayAction(
+        action = "translate_screen_blocks",
+        text = "",
+        blocks = blocks,
+        callback = callback,
+    )
+
+    /**
+     * Screen translation is opt-in and read from native prefs, because the
+     * overlay has to know the setting without waiting on the Dart isolate.
+     */
+    fun isScreenTranslationEnabled(): Boolean =
+        prefs()?.getBoolean(SCREEN_TRANSLATION_ENABLED, false) ?: false
+
+    private fun setScreenTranslationEnabled(enabled: Boolean): Boolean {
+        prefs()?.edit()?.putBoolean(SCREEN_TRANSLATION_ENABLED, enabled)?.apply()
+            ?: return false
+        return true
+    }
+
+    fun isContextualTranslateEnabled(): Boolean =
+        prefs()?.getBoolean(CONTEXTUAL_ENABLED, false) ?: false
+
+    private fun setContextualTranslateEnabled(enabled: Boolean): Boolean {
+        prefs()?.edit()?.putBoolean(CONTEXTUAL_ENABLED, enabled)?.apply()
+            ?: return false
+        return true
+    }
+
+    private fun prefs(): android.content.SharedPreferences? =
+        appContext?.getSharedPreferences(NATIVE_PREFS, Context.MODE_PRIVATE)
 
     private fun handle(
         method: String,
@@ -158,6 +221,20 @@ object BhashaChannel {
                 launchSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 result.success(null)
             }
+            "checkScreenTranslationEnabled" ->
+                result.success(isScreenTranslationEnabled())
+            "setScreenTranslationEnabled" -> result.success(
+                setScreenTranslationEnabled(
+                    call.argument<Boolean>("enabled") ?: false
+                )
+            )
+            "checkContextualTranslateEnabled" ->
+                result.success(isContextualTranslateEnabled())
+            "setContextualTranslateEnabled" -> result.success(
+                setContextualTranslateEnabled(
+                    call.argument<Boolean>("enabled") ?: false
+                )
+            )
             "updateFloatingActionType" -> {
                 OverlayService.updateActionType(
                     call.argument<String>("actionType") ?: "translate"

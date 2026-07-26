@@ -1,169 +1,95 @@
-# One-Tap Translation Feature - Implementation Summary
+# One-Tap and Contextual Translation
 
-## What Changed
+Bhasha now provides three Android translation surfaces. Sarvam performs every
+translation, and Sarvam Vision performs OCR when the double-tap screen mode
+cannot read the screen through Accessibility.
 
-The app has been simplified for elderly users to use **just ONE button tap** instead of 8+ steps.
+## 1. Focused-field one-tap translation
 
-## New Workflow
+The general floating bubble works across supported apps:
 
-### Before (Complex - 9 steps)
+1. Focus an editable text field.
+2. Tap the Bhasha bubble.
+3. Bhasha reads that field, sends the requested operation to Sarvam, and
+   replaces the editable text with the result.
 
-1. User types text
-2. Selects and copies text
-3. Taps floating button
-4. Taps "use clipboard"
-5. Taps "translate"
-6. Waits for result
-7. Taps "copy"
-8. Closes dialog
-9. Deletes original text and pastes
+This flow requires both overlay access and the Bhasha accessibility service.
 
-### After (Simple - 2 steps)
+## 2. Double-tap screen translation
 
-1. User types text
-2. **Taps floating button** → Done!
+1. Double-tap the general bubble without dragging it.
+2. Approve Android's one-time MediaProjection prompt.
+3. Bhasha reads the accessibility tree, or captures one frame in memory.
+4. That read returns source text plus 0–1000 bounding rectangles.
+5. Sarvam Mayura translates each block.
+6. Native Kotlin draws white replacement labels; tap anywhere to close.
 
-## Technical Implementation
+The accessibility path uploads nothing. The Sarvam Vision fallback uploads one
+screenshot as a digitization job; translation always runs on extracted strings.
 
-### New Components
+## 3. Contextual translation across apps
 
-1. **BhashaAccessibilityService.kt**
+The contextual flow is designed for reading visible accessible text without
+changing the original:
 
-   - Android accessibility service
-   - Reads text from focused input fields
-   - Writes text back to input fields
-   - Enables automatic text replacement
+1. Open a messaging, social, or content app.
+2. Long-press a supported text message.
+3. Tap **भ Translate** beside the message.
+4. Read the Sarvam result.
+5. Choose Copy, Insert in reply, or Close.
 
-2. **Simplified OverlayService.kt**
+The Insert action places the translated text in a compatible exposed composer.
+It does not send the message automatically.
 
-   - Single floating button showing "T"
-   - One-tap triggers `performOneClickTranslation()`
-   - Automatically gets text, translates, replaces
-   - Shows toast notifications for status
+## Detection and placement
 
-3. **Updated MainActivity.kt**
+Native Kotlin code owns Android UI inspection and overlays. A dedicated
+WhatsApp adapter recognizes package `com.whatsapp` and known conversation,
+message, composer, and footer view IDs. A generic adapter accepts visible,
+non-editable, non-password text from other eligible apps. The overlay
+controller positions the chip beside the selected content while avoiding known
+obstacles.
 
-   - Added `checkAccessibilityPermission()`
-   - Added `requestAccessibilityPermission()`
-   - Method channels for Flutter communication
+The chip is dismissed when the source view scrolls, its app is left, a
+normal click changes context, or the selected message can no longer be
+revalidated.
 
-4. **Updated Settings UI**
-   - Added "One-Tap Translation" card
-   - "Enable accessibility" button
-   - Clear instructions for users
+## Sarvam request path
 
-### New Permissions
-
-Added to AndroidManifest.xml:
-
-```xml
-<uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"/>
+```text
+Explicit text long-press
+  -> BhashaAccessibilityService
+  -> ContextualMessageOverlayController
+  -> cached Flutter engine method channel
+  -> OverlayRequestHandler action "translate_message"
+  -> SarvamService.translate
+  -> native result card
 ```
 
-### New Files Created
+The cached Flutter engine allows the request path to remain available while
+the main Bhasha activity is in the background.
 
-- `android/app/src/main/kotlin/com/yourapp/bhasha/BhashaAccessibilityService.kt`
-- `android/app/src/main/res/xml/accessibility_service_config.xml`
-- `android/app/src/main/res/values/strings.xml`
-- `SIMPLE_GUIDE_FOR_PARENTS.md`
+## Consent and privacy
 
-## How It Works
+- Contextual translation is disabled by default.
+- Enabling it requires an explicit in-app disclosure.
+- Android system surfaces, Bhasha itself, editable text, and password fields
+  are excluded from generic detection.
+- Only a supported selected text message is sent to Sarvam, and only after the
+  user taps Translate.
+- The full conversation is not sent.
+- Raw selected text is not stored in the native anchor or logged.
+- The feature can be disabled in Bhasha Settings at any time.
 
-```
-1. User types in WhatsApp/Messages/etc
-2. Taps floating "T" button
-   ↓
-3. OverlayService.performOneClickTranslation()
-   ↓
-4. BhashaAccessibilityService.getTextFromFocusedField()
-   ↓
-5. Send to Flutter via MainActivity.processOverlayAction()
-   ↓
-6. OpenAIService.translate()
-   ↓
-7. Return result to native
-   ↓
-8. BhashaAccessibilityService.replaceTextInFocusedField()
-   ↓
-9. Show "✓ Translated!" toast
-```
+## Failure behavior
 
-## Setup Steps for Users
+Unsupported or media-only content does not show a Translate chip. Sarvam or
+network failures show a contextual error card with Retry, Open Bhasha, and
+Close. The existing general floating bubble remains available as a fallback.
 
-### One-Time Setup
+## Verification
 
-1. Open Bhasha app
-2. Go to Settings
-3. Turn ON "Overlay bubble active"
-4. Tap "Enable accessibility"
-5. In Android settings, enable Bhasha accessibility service
-
-### Daily Use
-
-1. Open any app (WhatsApp, Messages, Email)
-2. Tap in text field and type in Kannada
-3. Tap the blue "T" button
-4. Text automatically translates to English
-
-## User Experience Improvements
-
-- **Reduced from 9 steps to 2 steps** (77% reduction!)
-- No copying/pasting required
-- No manual text deletion required
-- Instant visual feedback with toasts
-- Works in ANY app system-wide
-
-## Safety & Privacy
-
-- Accessibility service only reads/writes when user taps button
-- No background monitoring
-- Text only sent to OpenAI (user's API)
-- Service description clearly explains usage
-- Can be disabled anytime in Android settings
-
-## Testing Checklist
-
-- [ ] Accessibility permission granted
-- [ ] Floating button appears
-- [ ] Button is draggable
-- [ ] Tap button with text in field → translates
-- [ ] Tap button without text → shows error message
-- [ ] Tap button without accessibility → prompts to enable
-- [ ] Toast messages display correctly
-- [ ] Works in WhatsApp
-- [ ] Works in Messages
-- [ ] Works in Email apps
-- [ ] Works in Notes
-
-## Known Limitations
-
-1. Requires accessibility service permission (user must grant manually)
-2. Only works with editable text fields
-3. Must tap in text field first before using button
-4. Android-specific feature (iOS would need different implementation)
-
-## For Developers
-
-### To modify translation behavior:
-
-- Edit `OverlayService.kt` → `performOneClickTranslation()`
-
-### To add grammar check button:
-
-- Add second button in `createFloatingButton()`
-- Call `MainActivity.processOverlayAction("grammar", text)`
-
-### To customize button appearance:
-
-- Edit `createCircleBackground()` for colors
-- Modify button text/size in `createFloatingButton()`
-
-## Documentation
-
-- **For parents**: See `SIMPLE_GUIDE_FOR_PARENTS.md`
-- **For developers**: See `IMPLEMENTATION_SUMMARY.md`
-- **Quick start**: See `QUICKSTART.md`
-
----
-
-**Result**: Elderly users can now translate with ONE tap instead of NINE steps! 🎉
+The Dart request-handler tests cover Sarvam routing, subscription-key use,
+source-package metadata, the Sarvam Vision job pipeline, geometry preservation, and
+rejection of unsupported packages. Native changes must also pass Android lint
+and a debug APK build before handoff.
