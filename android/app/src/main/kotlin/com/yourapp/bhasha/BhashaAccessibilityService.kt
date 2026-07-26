@@ -52,17 +52,41 @@ class BhashaAccessibilityService : AccessibilityService() {
      * like real content. Dictation then appends to it ("Message ನಾಳೆ ಬರುತ್ತೇನೆ")
      * and tap-to-translate happily translates the word "Message".
      *
-     * `isShowingHintText` is the authoritative signal and exists from API 26.
-     * Below that there is no way to tell a hint from typed text, so the raw
-     * value stands rather than risking dropping something the user wrote.
+     * `isShowingHintText` is the documented signal, but it only holds for fields
+     * that leave hint handling to the framework. WhatsApp still leaked "Message"
+     * through with that check in place, so the placeholder is also matched
+     * against the labels the node itself publishes - `hintText` and
+     * `contentDescription`.
+     *
+     * The cost of the equality checks is that typing the placeholder word and
+     * nothing else ("Message") reads as an empty field, so a dictated phrase
+     * replaces it instead of being appended. That is a visible, one-word,
+     * recoverable loss in a case that essentially does not occur, weighed
+     * against a placeholder that leaks into every voice message.
+     *
+     * All three signals arrived in API 26. Below that Android offers no way to
+     * tell a hint from typed text, so the raw value stands rather than risking
+     * dropping something the parent wrote.
      */
     private fun typedTextOf(node: AccessibilityNodeInfo): String {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
-            node.isShowingHintText
-        ) {
-            return ""
-        }
-        return node.text?.toString().orEmpty()
+        val raw = node.text?.toString().orEmpty()
+        if (raw.isBlank()) return ""
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) return raw
+
+        if (node.isShowingHintText) return ""
+        if (looksLikePlaceholder(raw, node.hintText)) return ""
+        if (looksLikePlaceholder(raw, node.contentDescription)) return ""
+
+        return raw
+    }
+
+    /**
+     * Whether the field's content is indistinguishable from the label the node
+     * publishes for it, which is what an empty composer reports.
+     */
+    private fun looksLikePlaceholder(text: String, label: CharSequence?): Boolean {
+        val candidate = label?.toString()?.trim().orEmpty()
+        return candidate.isNotEmpty() && candidate == text.trim()
     }
 
     /**
@@ -169,7 +193,9 @@ class BhashaAccessibilityService : AccessibilityService() {
             val child = node.getChild(i) ?: continue
             val result = findFocusedEditText(child)
             if (result != null) {
-                child.recycle()
+                // The child may be the match itself. Recycling it here would
+                // hand the caller a node whose text is no longer readable.
+                if (result !== child) child.recycle()
                 return result
             }
             child.recycle()
