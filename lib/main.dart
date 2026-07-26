@@ -67,6 +67,15 @@ class _InitialScreenState extends State<InitialScreen> {
       await PlatformService().updateFloatingActionType(actionType);
     }
 
+    // The bubble draws its own language chip and picker from native
+    // preferences, so it needs the catalog and the current pair pushed down
+    // before the parent ever leaves for another app.
+    await PlatformService().syncLanguageSettings(
+      sourceLanguage: _storage.getSourceLanguage(),
+      targetLanguage: _storage.getTargetLanguage(),
+      autoFlip: _storage.getAutoFlip(),
+    );
+
     if (mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(

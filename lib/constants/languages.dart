@@ -11,6 +11,10 @@ class SarvamLanguage {
 
   /// BCP-47 code sent to Sarvam.
   final String code;
+
+  /// Compact label for the overlay chip, where a full name will not fit:
+  /// `kn-IN` becomes `KN`, `kok-IN` becomes `KOK`.
+  String get shortLabel => code.split('-').first.toUpperCase();
 }
 
 class Languages {
@@ -77,6 +81,10 @@ class Languages {
   }
 
   static bool isSupported(String name) => codeFor(name) != null;
+
+  /// True when both codes name the same language, whatever their casing.
+  static bool sameLanguage(String a, String b) =>
+      a.toLowerCase() == b.toLowerCase();
 
   static String getDisplayName(String language) => language;
 }
