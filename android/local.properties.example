@@ -1,0 +1,10 @@
+# This file should be created as local.properties (not committed to git)
+# Replace the path below with your actual Flutter SDK path
+
+sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
+flutter.sdk=/path/to/flutter
+
+# Example paths:
+# macOS: flutter.sdk=/Users/username/development/flutter
+# Linux: flutter.sdk=/home/username/development/flutter
+# Windows: flutter.sdk=C:\\src\\flutter

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bhasha</string>
+    <string name="accessibility_service_description">Bhasha uses this service to automatically translate and replace text in input fields with one tap. Your text is only sent to OpenAI for translation and is not stored or shared.</string>
+</resources>
