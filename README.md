@@ -26,11 +26,23 @@ The bubble can be assigned one of two actions in **Settings → One-Tap Action**
 
 2. **Grammar**
 
-   Reads the focused text, corrects it in the configured target language, and replaces the original text.
+   Reads the focused text and corrects it, in the language it was actually written in, then replaces the original text.
 
 Holding the bubble records speech and appends the result to the focused field, whichever action is selected.
 
 **Double-tapping** the bubble translates everything visible on screen and draws the result over the original text. It is off by default; enable it in **Settings → Double-tap screen translation**.
+
+### Changing language without leaving the app
+
+Two things keep language switching out of Settings, where it used to force the parent to leave WhatsApp mid-conversation.
+
+**Auto-flip** (on by default) treats the two configured languages as a pair with no fixed direction. Bhasha detects what was written or spoken and returns the other side: type Kannada and get English, type English and get Kannada, from the same button. Text in a third language still goes to the target, which is the language the parent reads. Turn it off in **Settings → Auto-flip between these two** to pin one direction.
+
+Auto-flip applies to one-tap translation and hold-to-speak. Screen translation always renders into the target language, because a screen is someone else's text and there is no direction to reverse.
+
+**The language chip** sits under the bubble and always shows the current pair — `KN⇄EN` with auto-flip on, `→EN` with a fixed direction. Tapping it opens a picker drawn over the current app, so the language can be changed without leaving it. The bubble's own tap, double tap and long press are already the three actions, so the chip is a separate touch target rather than a fourth gesture.
+
+A pick made from the chip is carried to Dart with the next request and saved, so the in-app Settings screen and the bubble never disagree about the current language.
 
 ## Current implementation status
 
