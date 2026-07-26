@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Bhasha double-tap screen translation: OpenAI OCR, Sarvam translation, and Android MediaProjection overlays.">
+  <title>Bhasha — Double-tap Screen Translation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #151713;
+      --ink-2: #40453d;
+      --paper: #f2eddf;
+      --paper-2: #e9e0ce;
+      --white: #fffdf7;
+      --coral: #f16b4c;
+      --lime: #d9f574;
+      --blue: #4b62d3;
+      --line: rgba(21, 23, 19, .18);
+      --serif: "Fraunces", Georgia, serif;
+      --sans: "IBM Plex Sans", sans-serif;
+      --mono: "IBM Plex Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(21,23,19,.045) 1px, transparent 1px),
+        var(--paper);
+      background-size: 100% 52px;
+      font-family: var(--sans);
+      line-height: 1.62;
+    }
+    a { color: inherit; }
+    button { font: inherit; }
+    ::selection { background: var(--lime); }
+
+    .progress {
+      position: fixed;
+      z-index: 50;
+      inset: 0 auto auto 0;
+      width: 0;
+      height: 4px;
+      background: var(--coral);
+    }
+
+    .rail {
+      position: fixed;
+      z-index: 20;
+      inset: 0 auto 0 0;
+      width: 250px;
+      padding: 28px 24px;
+      color: #faf7ee;
+      background: var(--ink);
+      display: flex;
+      flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand__mark {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background: var(--lime);
+      border-radius: 50% 50% 12px 50%;
+      font-family: var(--serif);
+      font-size: 23px;
+    }
+    .brand strong { display: block; font-size: 15px; }
+    .brand small {
+      display: block;
+      color: rgba(255,255,255,.46);
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .rail nav { margin-top: 58px; }
+    .rail nav a {
+      display: block;
+      padding: 10px 0;
+      color: rgba(255,255,255,.48);
+      border-bottom: 1px solid rgba(255,255,255,.1);
+      font-family: var(--mono);
+      font-size: 10px;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: color .2s;
+    }
+    .rail nav a:hover, .rail nav a.active { color: var(--lime); }
+    .rail__foot {
+      margin-top: auto;
+      color: rgba(255,255,255,.42);
+      font-family: var(--mono);
+      font-size: 9px;
+      line-height: 1.8;
+      text-transform: uppercase;
+    }
+
+    main { margin-left: 250px; overflow: hidden; }
+    .wrap { width: min(1180px, calc(100% - 56px)); margin: 0 auto; }
+    .hero {
+      min-height: 94vh;
+      padding: 48px 0 74px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow, .kicker {
+      margin: 0;
+      color: var(--coral);
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before, .kicker::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 10px;
+      background: currentColor;
+      border-radius: 50%;
+    }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 600; }
+    h1 {
+      max-width: 1050px;
+      margin: 52px 0 32px;
+      font-size: clamp(58px, 8.5vw, 128px);
+      line-height: .86;
+      letter-spacing: -.055em;
+    }
+    h1 em { color: var(--blue); font-style: normal; }
+    .hero__copy {
+      max-width: 700px;
+      margin-left: auto;
+      color: var(--ink-2);
+      font-size: clamp(17px, 1.6vw, 22px);
+    }
+    .hero__meta {
+      margin-top: 66px;
+      display: grid;
+      grid-template-columns: 1.5fr repeat(3, 1fr);
+      border-block: 1px solid var(--ink);
+    }
+    .meta { padding: 18px 16px; border-right: 1px solid var(--line); }
+    .meta:last-child { border-right: 0; }
+    .meta span {
+      display: block;
+      color: var(--ink-2);
+      font-family: var(--mono);
+      font-size: 8px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .meta strong { font-size: 14px; }
+    .live { color: #27613d; }
+
+    section { padding: 104px 0; border-bottom: 1px solid var(--line); }
+    .section-head {
+      display: grid;
+      grid-template-columns: .7fr 1.3fr;
+      gap: 50px;
+      align-items: end;
+      margin-bottom: 58px;
+    }
+    h2 {
+      margin: 0;
+      font-size: clamp(40px, 5.4vw, 76px);
+      line-height: .98;
+      letter-spacing: -.045em;
+    }
+    .section-head p {
+      max-width: 600px;
+      margin: 0;
+      color: var(--ink-2);
+      font-size: 17px;
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, .86fr) 1.14fr;
+      gap: 60px;
+      align-items: center;
+    }
+    .phone-shell {
+      width: min(390px, 100%);
+      margin: 0 auto;
+      padding: 10px;
+      background: #171a18;
+      border-radius: 46px;
+      box-shadow: 0 38px 90px rgba(21,23,19,.28);
+      transform: rotate(-2deg);
+    }
+    .phone {
+      position: relative;
+      height: 700px;
+      overflow: hidden;
+      background: #efeae2;
+      border: 2px solid #343733;
+      border-radius: 38px;
+    }
+    .phone__top {
+      height: 88px;
+      padding: 28px 18px 12px;
+      color: white;
+      background: #1f6b55;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .avatar { width: 40px; height: 40px; background: var(--lime); border-radius: 50%; }
+    .phone__top strong { display: block; font-size: 14px; }
+    .phone__top small { opacity: .7; }
+    .chat {
+      position: relative;
+      height: calc(100% - 88px);
+      padding: 24px 14px 82px;
+      background:
+        radial-gradient(circle at 20% 25%, rgba(23,107,74,.06), transparent 14rem),
+        #efeae2;
+    }
+    .message {
+      position: relative;
+      width: fit-content;
+      max-width: 82%;
+      margin-bottom: 18px;
+      padding: 10px 12px 18px;
+      background: white;
+      border-radius: 4px 14px 14px 14px;
+      box-shadow: 0 2px 3px rgba(0,0,0,.08);
+      font-size: 15px;
+      line-height: 1.4;
+    }
+    .message.out { margin-left: auto; background: #d7f8ca; border-radius: 14px 4px 14px 14px; }
+    .message small { position: absolute; right: 7px; bottom: 3px; color: #72776f; font-size: 8px; }
+    .composer {
+      position: absolute;
+      inset: auto 10px 10px;
+      padding: 13px 16px;
+      color: #777;
+      background: white;
+      border-radius: 24px;
+      font-size: 13px;
+    }
+    .bubble {
+      position: absolute;
+      z-index: 6;
+      right: 12px;
+      top: 330px;
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: var(--blue);
+      border: 4px solid rgba(255,255,255,.75);
+      border-radius: 50%;
+      box-shadow: 0 12px 30px rgba(27,36,99,.34);
+      font-family: var(--serif);
+      font-size: 25px;
+      cursor: pointer;
+      user-select: none;
+      transition: transform .16s, background .2s;
+    }
+    .bubble:active { transform: scale(.88); }
+    .bubble.pulse { animation: pulse .48s ease; }
+    @keyframes pulse { 50% { transform: scale(1.18); background: var(--coral); } }
+    .translation {
+      position: absolute;
+      z-index: 5;
+      padding: 5px 7px;
+      color: #131513;
+      background: rgba(255,255,255,.97);
+      border: 1px solid rgba(21,23,19,.28);
+      border-radius: 3px;
+      box-shadow: 0 3px 10px rgba(0,0,0,.13);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.3;
+      opacity: 0;
+      transform: translateY(5px);
+      transition: .32s ease;
+      pointer-events: none;
+    }
+    .translated .translation { opacity: 1; transform: none; }
+    .translation.t1 { top: 27px; left: 14px; width: 245px; }
+    .translation.t2 { top: 110px; right: 14px; width: 206px; }
+    .translation.t3 { top: 189px; left: 14px; width: 266px; }
+    .close-pill {
+      position: absolute;
+      z-index: 8;
+      top: 18px;
+      left: 50%;
+      padding: 9px 14px;
+      color: white;
+      background: var(--blue);
+      border: 0;
+      border-radius: 22px;
+      opacity: 0;
+      transform: translate(-50%, -10px);
+      pointer-events: none;
+      transition: .3s;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .translated .close-pill { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+    .demo-copy h3 { margin: 0 0 14px; font-size: 42px; line-height: 1.08; }
+    .demo-copy > p { color: var(--ink-2); font-size: 17px; }
+    .gesture-list { margin: 32px 0; border-top: 1px solid var(--ink); }
+    .gesture {
+      display: grid;
+      grid-template-columns: 74px 1fr;
+      padding: 17px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .gesture b { color: var(--coral); font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+    .gesture span { font-size: 14px; }
+    .demo-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .demo-actions button {
+      padding: 11px 16px;
+      color: var(--ink);
+      background: transparent;
+      border: 1px solid var(--ink);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .demo-actions button.primary { color: white; background: var(--ink); }
+    .demo-status {
+      min-height: 24px;
+      margin-top: 16px;
+      color: var(--blue);
+      font-family: var(--mono);
+      font-size: 10px;
+    }
+
+    .providers {
+      display: grid;
+      grid-template-columns: 1fr 80px 1fr;
+      align-items: stretch;
+    }
+    .provider {
+      min-height: 330px;
+      padding: 34px;
+      background: var(--white);
+      border: 1px solid var(--ink);
+    }
+    .provider.openai { background: var(--ink); color: white; }
+    .provider__number { color: var(--coral); font-family: var(--mono); font-size: 10px; }
+    .provider h3 { margin: 80px 0 12px; font-size: 38px; }
+    .provider p { max-width: 420px; color: inherit; opacity: .7; }
+    .provider code { font-family: var(--mono); font-size: 11px; }
+    .connector { display: grid; place-items: center; font-family: var(--mono); font-size: 20px; }
+    .provider-rule {
+      margin-top: 36px;
+      padding: 22px;
+      color: var(--ink);
+      background: var(--lime);
+      font-family: var(--mono);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .flow {
+      counter-reset: flow;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 1px solid var(--ink);
+    }
+    .flow article {
+      min-height: 260px;
+      padding: 25px;
+      border-right: 1px solid var(--ink);
+      counter-increment: flow;
+    }
+    .flow article:last-child { border-right: 0; }
+    .flow article::before {
+      content: "0" counter(flow);
+      color: var(--coral);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .flow h3 { margin: 72px 0 9px; font-size: 25px; }
+    .flow p { margin: 0; color: var(--ink-2); font-size: 13px; }
+
+    .privacy-grid { display: grid; grid-template-columns: 1.1fr .9fr; border: 1px solid var(--ink); }
+    .privacy-copy { padding: 44px; background: var(--white); }
+    .privacy-copy h3 { margin: 0 0 25px; font-size: 36px; }
+    .privacy-copy ul { margin: 0; padding-left: 18px; }
+    .privacy-copy li { margin: 13px 0; }
+    .privacy-quote {
+      padding: 44px;
+      color: white;
+      background: var(--blue);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .privacy-quote blockquote {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 31px;
+      line-height: 1.2;
+    }
+    .privacy-quote small { font-family: var(--mono); opacity: .65; }
+
+    .matrix { width: 100%; border-collapse: collapse; background: var(--white); }
+    .matrix th, .matrix td { padding: 17px 18px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .matrix th { color: var(--paper); background: var(--ink); font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+    .matrix td:first-child { font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+    .done { color: #277346; font-weight: 600; }
+
+    .ready {
+      padding: 70px;
+      color: white;
+      background: var(--coral);
+      display: grid;
+      grid-template-columns: 1.4fr .6fr;
+      gap: 40px;
+      align-items: end;
+    }
+    .ready h2 { max-width: 760px; }
+    .ready ol { margin: 0; padding-left: 20px; }
+    .ready li { margin: 9px 0; }
+    footer { padding: 25px 0 50px; color: var(--ink-2); font-family: var(--mono); font-size: 9px; text-transform: uppercase; }
+
+    .reveal { opacity: 0; transform: translateY(24px); transition: .7s cubic-bezier(.22,1,.36,1); }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    @media (max-width: 980px) {
+      .rail { position: relative; width: 100%; height: auto; flex-direction: row; align-items: center; justify-content: space-between; }
+      .rail nav, .rail__foot { display: none; }
+      main { margin-left: 0; }
+      .hero__meta, .flow { grid-template-columns: repeat(2, 1fr); }
+      .flow article:nth-child(2) { border-right: 0; }
+      .flow article { border-bottom: 1px solid var(--ink); }
+      .demo-grid, .section-head, .privacy-grid, .ready { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .wrap { width: min(100% - 34px, 1180px); }
+      h1 { font-size: 57px; }
+      section { padding: 76px 0; }
+      .hero__meta, .flow, .providers { grid-template-columns: 1fr; }
+      .meta { border-right: 0; border-bottom: 1px solid var(--line); }
+      .connector { height: 62px; transform: rotate(90deg); }
+      .flow article { border-right: 0; }
+      .ready { padding: 40px 24px; }
+      .privacy-copy, .privacy-quote { padding: 30px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" aria-hidden="true"></div>
+  <aside class="rail">
+    <div class="brand">
+      <span class="brand__mark">भ</span>
+      <span><strong>Bhasha</strong><small>Screen translation field note</small></span>
+    </div>
+    <nav aria-label="Document sections">
+      <a href="#interaction">01 / Interaction</a>
+      <a href="#providers">02 / Provider split</a>
+      <a href="#flow">03 / Runtime flow</a>
+      <a href="#privacy">04 / Privacy</a>
+      <a href="#implementation">05 / Implementation</a>
+      <a href="#test">06 / How to test</a>
+    </nav>
+    <div class="rail__foot">
+      Android 14 ready<br>
+      One-frame capture<br>
+      OpenAI OCR · Sarvam translation
+    </div>
+  </aside>
+
+  <main>
+    <header class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Implementation specification · 26 July 2026</p>
+        <h1>Double tap.<br><em>Translate the screen.</em></h1>
+        <p class="hero__copy">
+          The same Bhasha bubble now has a third, universal gesture. A double tap
+          captures one frame, asks OpenAI only where the text is, translates
+          those strings with Sarvam, and lays paper-white translations directly
+          over the original screen.
+        </p>
+        <div class="hero__meta">
+          <div class="meta"><span>Build state</span><strong class="live">Implemented · ready to test</strong></div>
+          <div class="meta"><span>OCR</span><strong>OpenAI Responses</strong></div>
+          <div class="meta"><span>Translation</span><strong>Sarvam Mayura v1</strong></div>
+          <div class="meta"><span>Installation</span><strong>Not installed yet</strong></div>
+        </div>
+      </div>
+    </header>
+
+    <section id="interaction">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div><p class="kicker">The interaction</p><h2>One bubble.<br>Three instincts.</h2></div>
+          <p>No new floating control is introduced. Dragging remains immediate;
+            single tap waits only for Android’s double-tap window, and the
+            second tap converts the gesture into a screen translation.</p>
+        </div>
+        <div class="demo-grid">
+          <div class="phone-shell reveal">
+            <div class="phone">
+              <div class="phone__top"><div class="avatar"></div><div><strong>Family</strong><small>online</small></div></div>
+              <div class="chat" id="chat">
+                <div class="message">ನಾಳೆ ಬೆಳಿಗ್ಗೆ ಹತ್ತು ಗಂಟೆಗೆ ಬಾ.<small>9:42</small></div>
+                <div class="message out">ಸರಿ, ನಾನು ಬರುತ್ತೇನೆ.<small>9:43 ✓✓</small></div>
+                <div class="message">ಊಟ ಮಾಡಿ ಬಾ, ತಡ ಮಾಡಬೇಡ.<small>9:44</small></div>
+                <span class="translation t1">Come tomorrow morning at ten.</span>
+                <span class="translation t2">Okay, I’ll come.</span>
+                <span class="translation t3">Eat before coming. Don’t be late.</span>
+                <button class="close-pill" id="closeDemo">✓ Screen translated · Close</button>
+                <div class="composer">Message</div>
+                <button class="bubble" id="bubbleDemo" aria-label="Bhasha translate bubble">T</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-copy reveal">
+            <h3>Try the bubble.</h3>
+            <p>Double-click the blue T in the phone. The white labels are the
+              exact visual behavior built for the Android overlay.</p>
+            <div class="gesture-list">
+              <div class="gesture"><b>Tap</b><span>Translate or proofread the currently focused editable field.</span></div>
+              <div class="gesture"><b>Double</b><span>Capture once, OCR the visible screen, translate every readable block, and overlay the result.</span></div>
+              <div class="gesture"><b>Drag</b><span>Move the bubble. Crossing Android’s touch-slop cancels any pending tap.</span></div>
+              <div class="gesture"><b>Long</b><span>The existing contextual selected-message action can remain available separately.</span></div>
+            </div>
+            <div class="demo-actions">
+              <button id="singleDemo">Simulate single tap</button>
+              <button class="primary" id="doubleDemo">Simulate double tap</button>
+              <button id="resetDemo">Close translations</button>
+            </div>
+            <div class="demo-status" id="demoStatus" aria-live="polite">Waiting for a gesture.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="providers">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div><p class="kicker">Provider boundary</p><h2>Vision here.<br>Language there.</h2></div>
+          <p>Sarvam stays the language engine. OpenAI receives no instruction
+            to translate and returns only source text plus normalized geometry.</p>
+        </div>
+        <div class="providers reveal">
+          <article class="provider openai">
+            <span class="provider__number">01 / OCR ONLY</span>
+            <h3>OpenAI</h3>
+            <p>Receives one base64 JPEG through <code>/v1/responses</code> with
+              <code>store:false</code> and <code>detail:original</code>. Returns
+              at most 40 blocks on a 0–1000 canvas.</p>
+          </article>
+          <div class="connector">→</div>
+          <article class="provider">
+            <span class="provider__number">02 / TRANSLATION ONLY</span>
+            <h3>Sarvam</h3>
+            <p>Receives each extracted source string through Mayura v1. Bhasha
+              preserves its rectangle and maps the translated string back to the
+              same location, with four bounded requests in flight.</p>
+          </article>
+        </div>
+        <div class="provider-rule reveal">OpenAI never translates · Sarvam never receives the screenshot</div>
+      </div>
+    </section>
+
+    <section id="flow">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div><p class="kicker">Runtime</p><h2>One consent.<br>One frame.</h2></div>
+          <p>The capture token is requested for every action, used once, and
+            stopped as soon as a frame is available.</p>
+        </div>
+        <div class="flow reveal">
+          <article><h3>Double tap</h3><p>The pending single tap is cancelled. Bhasha checks that screen translation was explicitly enabled.</p></article>
+          <article><h3>Android consent</h3><p>A transparent permission activity opens the system MediaProjection prompt. Bhasha cannot silently approve it.</p></article>
+          <article><h3>Capture & read</h3><p>The bubble hides, ImageReader collects one frame, compresses it in memory, then immediately stops projection.</p></article>
+          <article><h3>Translate & cover</h3><p>OpenAI locates text, Sarvam translates each block, and a modal overlay draws white labels. Tap anywhere to close.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div><p class="kicker">Privacy contract</p><h2>Visible consent,<br>short memory.</h2></div>
+          <p>Screen OCR is more sensitive than accessibility-node translation,
+            so it has its own key, setting, disclosure, Android consent, and
+            foreground-service notification.</p>
+        </div>
+        <div class="privacy-grid reveal">
+          <div class="privacy-copy">
+            <h3>What Bhasha guarantees</h3>
+            <ul>
+              <li>The screenshot is kept in memory and never written to a Bhasha file.</li>
+              <li>OpenAI is asked only for exact text and bounding rectangles.</li>
+              <li>The OpenAI request sets <code>store:false</code>.</li>
+              <li>Sarvam receives extracted strings, never the screenshot.</li>
+              <li>Both API keys are stored with Flutter Secure Storage.</li>
+              <li>Android secure windows may return a blank frame and remain untranslated.</li>
+              <li>No capture begins without the system MediaProjection dialog.</li>
+            </ul>
+          </div>
+          <div class="privacy-quote">
+            <blockquote>“One screen, only when I double tap, only after Android asks me.”</blockquote>
+            <small>Consent text implemented in Bhasha Settings</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="implementation">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div><p class="kicker">Code map</p><h2>Ready in the<br>current tree.</h2></div>
+          <p>Flutter owns credentials and provider coordination. Kotlin owns the
+            gesture, capture lifecycle, and system overlay—as required by the
+            app’s architecture.</p>
+        </div>
+        <div class="reveal" style="overflow-x:auto">
+          <table class="matrix">
+            <thead><tr><th>Surface</th><th>Responsibility</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>OverlayService.kt</td><td>Touch-slop-aware drag, delayed single tap, double-tap screen action, Flutter handoff.</td><td class="done">Implemented</td></tr>
+              <tr><td>ScreenCapturePermissionActivity.kt</td><td>User-visible Android MediaProjection consent.</td><td class="done">Implemented</td></tr>
+              <tr><td>ScreenCaptureService.kt</td><td>Android 14 media-projection foreground service, one-shot ImageReader, in-memory JPEG.</td><td class="done">Implemented</td></tr>
+              <tr><td>openai_ocr_service.dart</td><td>Responses REST request, strict JSON schema, OCR-only prompt, safe errors.</td><td class="done">Implemented</td></tr>
+              <tr><td>overlay_request_handler.dart</td><td>OCR → bounded Sarvam block translation → geometry-preserving response.</td><td class="done">Implemented</td></tr>
+              <tr><td>ScreenTranslationOverlayController.kt</td><td>Paper-white text labels and a modal close surface.</td><td class="done">Implemented</td></tr>
+              <tr><td>settings_screen.dart</td><td>Separate secure OCR key, explicit disclosure, feature toggle.</td><td class="done">Implemented</td></tr>
+              <tr><td>AndroidManifest.xml</td><td>Media-projection foreground permission, service, and permission activity declarations.</td><td class="done">Implemented</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="test">
+      <div class="wrap">
+        <div class="ready reveal">
+          <div>
+            <p class="kicker" style="color:#fff">Your test sequence</p>
+            <h2>Open any app.<br>Double-tap Bhasha.</h2>
+          </div>
+          <ol>
+            <li>Open Bhasha Settings.</li>
+            <li>Save the Sarvam API key.</li>
+            <li>Save the separate OpenAI screen OCR key.</li>
+            <li>Enable “Double-tap screen translation” and accept the disclosure.</li>
+            <li>Turn on the floating bubble.</li>
+            <li>Open WhatsApp or another app with visible text.</li>
+            <li>Double-tap the T, approve Android capture, then wait for white translated labels.</li>
+            <li>Tap anywhere to close. Single tap and drag should still behave normally.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <footer><div class="wrap">Bhasha / screen OCR by OpenAI / translation by Sarvam / Android implementation note</div></footer>
+  </main>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const bubble = document.getElementById('bubbleDemo');
+    const status = document.getElementById('demoStatus');
+    let tapTimer = null;
+    let lastTap = 0;
+
+    function showTranslations() {
+      clearTimeout(tapTimer);
+      chat.classList.add('translated');
+      bubble.classList.add('pulse');
+      status.textContent = 'Double tap → capture → OpenAI OCR → Sarvam → overlay.';
+      setTimeout(() => bubble.classList.remove('pulse'), 520);
+    }
+    function closeTranslations() {
+      chat.classList.remove('translated');
+      status.textContent = 'Translations closed. The underlying app is active again.';
+    }
+    function singleTap() {
+      closeTranslations();
+      status.textContent = 'Single tap → focused-field action (translate or grammar).';
+    }
+    bubble.addEventListener('click', () => {
+      const now = Date.now();
+      if (now - lastTap < 330) {
+        lastTap = 0;
+        showTranslations();
+      } else {
+        lastTap = now;
+        tapTimer = setTimeout(() => {
+          if (lastTap) singleTap();
+          lastTap = 0;
+        }, 330);
+      }
+    });
+    document.getElementById('singleDemo').addEventListener('click', singleTap);
+    document.getElementById('doubleDemo').addEventListener('click', showTranslations);
+    document.getElementById('resetDemo').addEventListener('click', closeTranslations);
+    document.getElementById('closeDemo').addEventListener('click', closeTranslations);
+
+    const progress = document.querySelector('.progress');
+    const navLinks = [...document.querySelectorAll('.rail nav a')];
+    const sections = [...document.querySelectorAll('main section')];
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => entry.isIntersecting && entry.target.classList.add('visible'));
+    }, { threshold: .12 });
+    reveals.forEach(el => observer.observe(el));
+
+    window.addEventListener('scroll', () => {
+      const max = document.documentElement.scrollHeight - innerHeight;
+      progress.style.width = `${max ? scrollY / max * 100 : 0}%`;
+      let current = '';
+      sections.forEach(section => {
+        if (scrollY >= section.offsetTop - 180) current = section.id;
+      });
+      navLinks.forEach(link => link.classList.toggle('active', link.hash === `#${current}`));
+    }, { passive: true });
+  </script>
+</body>
+</html>

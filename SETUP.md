@@ -1,232 +1,181 @@
 # Bhasha Setup Guide
 
-This guide will help you set up and run the Bhasha language assistant app.
+## Requirements
 
-## Prerequisites
+- Flutter SDK compatible with the checked-in project
+- Android SDK and platform tools
+- JDK compatible with the Android Gradle plugin
+- Android 7.0 (API 24) or newer
+- A Sarvam API key, unless a subscription key is supplied by the app
 
-1. **Flutter SDK** (version 3.0 or higher)
+## Local project setup
 
-   - Download from: https://flutter.dev/docs/get-started/install
-   - Add Flutter to your PATH
-
-2. **Android Studio** or **Android SDK**
-
-   - Required for Android development
-   - Install Android SDK and command-line tools
-
-3. **OpenAI API Key**
-   - Sign up at: https://platform.openai.com
-   - Create an API key in the API keys section
-   - You'll need this to enable translation and grammar checking
-
-## Installation Steps
-
-### 1. Clone and Setup
-
-```bash
-cd /path/to/bhasha
+```sh
+cd /Users/anmolmoses/work/personal/bhasha
 flutter pub get
+flutter doctor
 ```
 
-### 2. Configure Android Local Properties
-
-Create a file `android/local.properties` with your Flutter SDK path:
+If Flutter has not created `android/local.properties`, add local paths without
+committing the file:
 
 ```properties
-sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
-flutter.sdk=/path/to/your/flutter/sdk
+sdk.dir=/absolute/path/to/Android/sdk
+flutter.sdk=/absolute/path/to/flutter
 ```
 
-### 3. Connect Android Device or Start Emulator
+Validate the project:
 
-**Physical Device:**
-
-```bash
-# Enable USB debugging on your Android device
-# Connect via USB
-adb devices  # Verify device is connected
+```sh
+flutter analyze
+flutter test
+flutter build apk --debug
 ```
 
-**Emulator:**
+## Sarvam configuration
 
-```bash
-# Start from Android Studio or command line
-flutter emulators
-flutter emulators --launch <emulator_name>
+Bhasha stores a user-entered API key in Android secure storage. The key is not
+logged. Translation, grammar checking, and language detection requests are
+handled by `lib/services/sarvam_service.dart`.
+
+The application may also receive a managed subscription key through its
+existing subscription flow. Do not hard-code secrets in Dart, Kotlin,
+documentation, or build output.
+
+## Android integrations
+
+### Double-tap screen translation
+
+Screen translation is off by default and has a separate disclosure. Save the
+Sarvam key, enable **Double-tap screen translation**, then enable the
+floating overlay.
+
+Every double tap starts `ScreenCapturePermissionActivity`, which displays
+Android's MediaProjection consent prompt. `ScreenCaptureService` then:
+
+- hides Bhasha overlays before capture;
+- collects one frame through `ImageReader`;
+- compresses the frame to an in-memory JPEG;
+- stops MediaProjection immediately;
+- sends the image to Sarvam Vision for OCR and normalized rectangles;
+- sends only the extracted strings to Sarvam Mayura;
+- draws translated labels through `ScreenTranslationOverlayController`.
+
+The screenshot is not saved by Bhasha. Apps using `FLAG_SECURE` may produce a
+blank capture and cannot be translated by this mode.
+
+### Contextual translation across apps
+
+The contextual feature requires the Bhasha accessibility service and is off by
+default. Enabling it shows a separate disclosure before Android accessibility
+settings are opened.
+
+At runtime the native adapter:
+
+- uses a dedicated resource-ID adapter for consumer WhatsApp;
+- falls back to visible, non-editable, non-password accessibility text in
+  other eligible apps;
+- reacts to an explicit long-press on a supported text message;
+- anchors a temporary Translate chip near that message;
+- sends only the selected text to Flutter/Sarvam after the chip is tapped;
+- offers Copy, Insert in reply, Close, and Retry;
+- dismisses the contextual UI on scrolling, leaving the source app, or stale
+  content.
+
+Raw message text is not persisted in the contextual anchor. The anchor keeps a
+hash and geometry so the selected node can be revalidated before translation.
+
+### Floating overlay
+
+The floating button requires Android's **Display over other apps** permission.
+It operates on the currently focused editable field through the accessibility
+service. The contextual UI temporarily hides this general bubble to
+avoid overlapping controls.
+
+### Custom keyboard
+
+The IME must be enabled and selected by the user in Android keyboard settings.
+The `BIND_INPUT_METHOD` permission is declared on the service, not requested by
+the application. Likewise, `BIND_ACCESSIBILITY_SERVICE` belongs on the
+accessibility service declaration.
+
+## Permission model
+
+- `INTERNET`: Sarvam translation and screen-OCR requests.
+- `FOREGROUND_SERVICE_MEDIA_PROJECTION`: one-shot screen capture after consent.
+- `SYSTEM_ALERT_WINDOW`: optional general floating button.
+- Accessibility service: optional field replacement and contextual
+  translation, enabled manually in system settings.
+- Input method service: optional Bhasha keyboard, enabled manually in system
+  settings.
+- Foreground service: keeps the enabled floating overlay available.
+- Android screen-capture consent: granted manually for each screen action.
+
+Android does not allow Bhasha to silently grant any special access.
+
+## Build and package
+
+```sh
+flutter build apk --debug
 ```
 
-### 4. Run the App
+Output:
 
-```bash
-flutter run
+```text
+build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-Or use your IDE:
+Installing is a separate, explicit action:
 
-- **VS Code**: Press F5
-- **Android Studio**: Click the Run button
+```sh
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+```
 
-## First-Time Setup
-
-When you launch the app for the first time:
-
-1. **Welcome Screen**: Review the app features
-2. **Language Selection**: Choose your source language (e.g., Kannada) and target language (e.g., English)
-3. **API Key**: Enter your OpenAI API key
-   - The key is stored securely on your device
-   - It's never transmitted except to OpenAI's API
-4. **Get Started**: Complete the onboarding
-
-## Choosing Your Mode
-
-### Floating Button Mode
-
-1. Go to Settings
-2. Select "Floating Button" mode
-3. Grant overlay permission when prompted
-4. Enable the floating button toggle
-5. The button will appear on all screens
-6. Tap it to translate or check grammar
-
-### Custom Keyboard Mode
-
-1. Go to Settings
-2. Select "Custom Keyboard" mode
-3. Tap "Open Keyboard Settings"
-4. Enable "Bhasha Keyboard"
-5. Select it as your active input method
-6. Use the keyboard in any app
-7. Use the toolbar buttons for translation/grammar
-
-## Features
-
-### Translation
-
-- Translate text between any supported languages
-- Swap source and target languages with one tap
-- Copy results to clipboard
-
-### Grammar Checking
-
-- Check grammar and spelling in any language
-- Get corrected text instantly
-- Works with your target language
-
-### Supported Languages
-
-- English, Kannada, Hindi, Spanish, French, German, Italian, Portuguese
-- Russian, Chinese, Japanese, Korean, Arabic, Dutch, Swedish
-- And 20+ more languages!
-
-## Permissions
-
-The app requires these permissions:
-
-- **INTERNET**: To call OpenAI API
-- **SYSTEM_ALERT_WINDOW**: For floating button overlay (optional)
-- **BIND_INPUT_METHOD**: For custom keyboard (optional)
-
-You only need overlay permission if using floating button mode.
-You only need to enable the keyboard if using keyboard mode.
+Do not run the install command when only preparing a build artifact.
 
 ## Troubleshooting
 
-### App won't build
+### Contextual chip does not appear
 
-- Ensure Flutter is properly installed: `flutter doctor`
-- Clear build cache: `flutter clean && flutter pub get`
-- Check Android SDK is installed
+- Confirm **Contextual translate across apps** is enabled in Bhasha.
+- Confirm Bhasha is enabled under Android Accessibility.
+- Open an eligible app and long-press visible text.
+- Media-only, deleted, unsupported, or non-message nodes intentionally do not
+  produce a chip.
 
-### Floating button not appearing
+### Sarvam request fails
 
-- Check overlay permission is granted
-- Go to Settings > Apps > Bhasha > Permissions
-- Enable "Display over other apps"
+- Verify the API key or managed subscription is present and valid.
+- Confirm internet access.
+- Use Retry on the contextual error card, or open Bhasha for settings.
 
-### Keyboard not showing
+### Double-tap screen translation fails
 
-- Go to System Settings > Languages & input
-- Enable Bhasha Keyboard under "Virtual keyboard"
-- Select it as active keyboard
+- Confirm the Sarvam API key is saved.
+- Confirm **Double-tap screen translation** is enabled.
+- Approve Android's capture prompt.
+- Verify Sarvam accepts the subscription key and has credits.
+- Try a normal app screen; secure or blank screens cannot be OCR'd.
 
-### Translation not working
+### Android build fails
 
-- Verify your API key is correct
-- Check internet connection
-- Ensure you have OpenAI API credits
-- Check API key permissions on OpenAI dashboard
+- Run `flutter doctor -v`.
+- Verify SDK and Flutter paths in `android/local.properties`.
+- Run `flutter clean && flutter pub get`.
+- Treat SDK, Gradle, plugin-test, and Kotlin metadata errors separately from
+  application compile failures.
 
-### Build errors with Kotlin/Gradle
+## Relevant implementation files
 
-- Ensure you have JDK 8 or higher installed
-- Update Android Studio to latest version
-- Sync Gradle files
-
-## Development
-
-### Project Structure
-
-```
-lib/
-  ├── main.dart              # App entry point
-  ├── models/                # Data models
-  ├── screens/               # UI screens
-  ├── services/              # Business logic
-  ├── widgets/               # Reusable UI components
-  └── constants/             # App constants
-
-android/
-  └── app/src/main/kotlin/   # Native Android code
-      ├── MainActivity.kt
-      ├── OverlayService.kt
-      └── CustomKeyboardIME.kt
-```
-
-### Adding New Languages
-
-Edit `lib/constants/languages.dart` and add to the `supported` list:
-
-```dart
-static const List<String> supported = [
-  'English',
-  'YourNewLanguage',
-  // ... more languages
-];
-```
-
-### Modifying OpenAI Prompts
-
-Edit `lib/services/openai_service.dart` to customize:
-
-- Translation prompts
-- Grammar checking prompts
-- Model selection (GPT-3.5 vs GPT-4)
-
-## API Costs
-
-OpenAI API usage is pay-as-you-go:
-
-- GPT-3.5-turbo: ~$0.002 per 1000 tokens
-- GPT-4: Higher cost but better quality
-
-Monitor usage on OpenAI dashboard.
-
-## Privacy & Security
-
-- API keys are stored encrypted on device
-- No data is sent to any server except OpenAI
-- Translation history is not saved
-- App works offline for UI (requires internet for API calls)
-
-## Support
-
-For issues or questions:
-
-1. Check this documentation
-2. Review Flutter and Android documentation
-3. Check OpenAI API documentation
-4. File issues in the project repository
-
-## License
-
-See LICENSE file for details.
+- `lib/services/sarvam_service.dart`
+- `lib/services/sarvam_vision_service.dart`
+- `lib/services/overlay_request_handler.dart`
+- `lib/services/platform_service.dart`
+- `android/app/src/main/kotlin/com/yourapp/bhasha/BhashaAccessibilityService.kt`
+- `android/app/src/main/kotlin/com/yourapp/bhasha/WhatsAppUiAdapter.kt`
+- `android/app/src/main/kotlin/com/yourapp/bhasha/ContextualMessageOverlayController.kt`
+- `android/app/src/main/kotlin/com/yourapp/bhasha/BhashaApplication.kt`
+- `android/app/src/main/kotlin/com/yourapp/bhasha/ScreenCapturePermissionActivity.kt`
+- `android/app/src/main/kotlin/com/yourapp/bhasha/ScreenCaptureService.kt`
+- `android/app/src/main/kotlin/com/yourapp/bhasha/ScreenTranslationOverlayController.kt`
+- `android/app/src/main/AndroidManifest.xml`

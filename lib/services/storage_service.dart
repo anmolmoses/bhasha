@@ -13,6 +13,7 @@ class StorageService {
 
   // Keys
   static const String _sarvamApiKeyKey = 'sarvam_api_key';
+  static const String _legacyOpenAiOcrKeyKey = 'openai_ocr_api_key';
   static const String _legacyOpenAiKeyKey = 'openai_api_key';
   static const String _appModeKey = 'app_mode';
   static const String _sourceLangKey = 'source_language';
@@ -24,19 +25,18 @@ class StorageService {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
-    await _purgeLegacyOpenAiKey();
+    await _purgeLegacyOpenAiKeys();
   }
 
-  /// Bhasha no longer talks to OpenAI. Any key left over from an earlier
-  /// install is deleted rather than left sitting in the keystore.
-  Future<void> _purgeLegacyOpenAiKey() async {
+  /// Screen OCR now runs on Sarvam Vision, so no OpenAI credential is used
+  /// anywhere. Delete anything an earlier build stored rather than leaving a
+  /// live key sitting in the keystore.
+  Future<void> _purgeLegacyOpenAiKeys() async {
     try {
-      final legacy = await _secureStorage.read(key: _legacyOpenAiKeyKey);
-      if (legacy != null) {
-        await _secureStorage.delete(key: _legacyOpenAiKeyKey);
-      }
+      await _secureStorage.delete(key: _legacyOpenAiOcrKeyKey);
+      await _secureStorage.delete(key: _legacyOpenAiKeyKey);
     } catch (_) {
-      // A keystore read failure must never block app startup.
+      // A keystore failure must never block app startup.
     }
   }
 

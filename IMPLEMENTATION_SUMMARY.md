@@ -1,4 +1,9 @@
-# Implementation Summary
+# Implementation Summary: Historical Snapshot
+
+> This document describes the original OpenAI-era implementation. The current
+> app uses Sarvam for language work, OpenAI only for opt-in screen OCR, and
+> adds universal double-tap screen translation plus contextual translation. See
+> `README.md`, `WHATSAPP_CONTEXTUAL_TRANSLATE.html`, and `USER_GUIDE.md`.
 
 ## Project Overview
 

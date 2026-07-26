@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!-- One-shot screen capture behind the double-tap screen translation. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+
     <!-- BhashaApplication owns the process-scoped FlutterEngine so the overlay
          can reach Dart while MainActivity is destroyed. -->
     <application android:label="Bhasha" android:name=".BhashaApplication" android:icon="@mipmap/ic_launcher" android:enableOnBackInvokedCallback="true">
@@ -30,12 +33,25 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ScreenCapturePermissionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
+
         <!-- Floating Overlay Service -->
         <!-- The service runs as specialUse and adds the microphone type only
              while the parent is actually holding the button to speak. -->
         <service android:name=".OverlayService" android:enabled="true" android:exported="false" android:foregroundServiceType="specialUse|microphone">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="overlay"/>
         </service>
+
+        <service
+            android:name=".ScreenCaptureService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection"/>
 
         <!-- Custom Keyboard IME Service -->
         <service android:name=".CustomKeyboardIME" android:label="Bhasha Keyboard" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">

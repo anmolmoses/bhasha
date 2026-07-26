@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.*
@@ -27,7 +28,12 @@ class OverlayService : Service() {
     private var floatingView: Button? = null
     private var statusBubble: View? = null
     private var statusText: TextView? = null
+    private var processingBubble: View? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /** Double-tap detection for screen translation. */
+    private var lastTapAt = 0L
+    private var pendingSingleTap: Runnable? = null
 
     private val voiceCapture by lazy { VoiceCaptureManager(this) }
     private var holdRunnable: Runnable? = null
@@ -41,6 +47,7 @@ class OverlayService : Service() {
         private const val HOLD_THRESHOLD_MS = 350L
 
         private var currentActionType: String = "translate"
+        private var instance: OverlayService? = null
 
         fun updateActionType(actionType: String) {
             currentActionType = actionType
@@ -49,10 +56,41 @@ class OverlayService : Service() {
         fun getCurrentActionType(): String {
             return currentActionType
         }
+
+        fun setCaptureUiHidden(hidden: Boolean) {
+            instance?.mainHandler?.post {
+                instance?.floatingView?.visibility =
+                    if (hidden) View.INVISIBLE else View.VISIBLE
+                if (hidden) {
+                    instance?.hideProcessingBubble()
+                }
+            }
+        }
+
+        fun onScreenCaptureReady(jpegBase64: String) {
+            instance?.mainHandler?.post {
+                instance?.floatingView?.visibility = View.VISIBLE
+                instance?.translateCapturedScreen(jpegBase64)
+            }
+        }
+
+        fun onScreenCaptureError(message: String) {
+            instance?.mainHandler?.post {
+                instance?.floatingView?.visibility = View.VISIBLE
+                instance?.hideProcessingBubble()
+                if (message != "Screen capture was cancelled.") {
+                    ScreenTranslationOverlayController.showMessage(
+                        instance ?: return@post,
+                        message,
+                    )
+                }
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createNotificationChannel()
         startAsOverlayService()
         createFloatingButton()
@@ -237,7 +275,7 @@ class OverlayService : Service() {
                         stopSelf()
                     } else if (deltaX < dragSlop && deltaY < dragSlop) {
                         // It's a click, not a drag
-                        performOverlayAction()
+                        handleTap()
                     }
                     true
                 }
@@ -627,4 +665,245 @@ class OverlayService : Service() {
         floatingView = null
         hideStatus()
     }
+
+    // ---------------------------------------------------------------------
+    // Double tap to translate the whole screen
+    // ---------------------------------------------------------------------
+
+    /**
+     * A single tap runs the usual translate/grammar action, but only after the
+     * double-tap window closes, so a double tap is not also seen as a tap.
+     */
+    private fun handleTap() {
+        val timeout = ViewConfiguration.getDoubleTapTimeout().toLong()
+        val now = SystemClock.uptimeMillis()
+        val pending = pendingSingleTap
+
+        if (pending != null && now - lastTapAt <= timeout) {
+            mainHandler.removeCallbacks(pending)
+            pendingSingleTap = null
+            lastTapAt = 0L
+            performScreenTranslation()
+            return
+        }
+
+        lastTapAt = now
+        val runnable = Runnable {
+            pendingSingleTap = null
+            performOverlayAction()
+        }
+        pendingSingleTap = runnable
+        mainHandler.postDelayed(runnable, timeout)
+    }
+
+    private fun performScreenTranslation() {
+        if (!BhashaChannel.isScreenTranslationEnabled()) {
+            showToast("Enable Double-tap screen translation in Bhasha Settings.")
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+            return
+        }
+        if (ScreenTranslationOverlayController.isVisible()) {
+            ScreenTranslationOverlayController.dismiss()
+            return
+        }
+
+        // Prefer reading the screen through accessibility: it is exact, needs
+        // no screen-capture prompt, and is the only path that works on a
+        // WhatsApp chat, whose wallpaper defeats the OCR model's layout
+        // detection. Fall back to Sarvam Vision when the tree gives us nothing.
+        if (translateScreenViaAccessibility()) return
+
+        try {
+            startActivity(
+                Intent(this, ScreenCapturePermissionActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+        } catch (_: Exception) {
+            showToast("Could not open Android screen capture.")
+        }
+    }
+
+    /**
+     * Reads the foreground app's text from the accessibility tree and
+     * translates it. Returns false when nothing usable was found, so the
+     * caller can fall back to the screenshot path.
+     */
+    private fun translateScreenViaAccessibility(): Boolean {
+        val service = BhashaAccessibilityService.getInstance() ?: return false
+        val nodes = service.collectScreenTextNodes()
+        if (nodes.isEmpty()) return false
+
+        // Must be the full display bounds, matching what the overlay draws
+        // against. displayMetrics excludes the system bars, and normalising
+        // with it while denormalising with the window bounds shifts every
+        // label down the screen.
+        val metricsManager =
+            getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val bounds =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                metricsManager.currentWindowMetrics.bounds
+            } else {
+                @Suppress("DEPRECATION")
+                android.graphics.Rect(
+                    0,
+                    0,
+                    resources.displayMetrics.widthPixels,
+                    resources.displayMetrics.heightPixels,
+                )
+            }
+        val screenWidth = bounds.width().toFloat()
+        val screenHeight = bounds.height().toFloat()
+        if (screenWidth <= 0f || screenHeight <= 0f) return false
+
+        // The overlay draws against a 0-1000 canvas, matching the OCR path.
+        val blocks = nodes.mapNotNull { node ->
+            val bounds = node.bounds
+            val width = bounds.width() / screenWidth * 1000f
+            val height = bounds.height() / screenHeight * 1000f
+            if (width <= 0f || height <= 0f) return@mapNotNull null
+            hashMapOf<String, Any?>(
+                "text" to node.text,
+                "x" to (bounds.left / screenWidth * 1000f),
+                "y" to (bounds.top / screenHeight * 1000f),
+                "width" to width,
+                "height" to height,
+            )
+        }
+        if (blocks.isEmpty()) return false
+
+        showProcessingBubble("screen")
+        BhashaChannel.processScreenTextBlocks(blocks) { success, data, error ->
+            mainHandler.post {
+                hideProcessingBubble()
+                showTranslatedScreen(success, data, error)
+            }
+        }
+        return true
+    }
+
+    private fun translateCapturedScreen(jpegBase64: String) {
+        showProcessingBubble("screen")
+        BhashaChannel.processScreenTranslation(jpegBase64) {
+                success, data, error ->
+            mainHandler.post {
+                hideProcessingBubble()
+                showTranslatedScreen(success, data, error)
+            }
+        }
+    }
+
+    private fun showTranslatedScreen(
+        success: Boolean,
+        data: Map<String, Any?>?,
+        error: String?,
+    ) {
+        if (!success || data == null) {
+            ScreenTranslationOverlayController.showMessage(
+                this,
+                error ?: "Screen translation failed.",
+            )
+            return
+        }
+        val blocks =
+            (data["blocks"] as? List<*>)
+                ?.mapNotNull(::parseTranslatedScreenBlock)
+                .orEmpty()
+        if (blocks.isEmpty()) {
+            ScreenTranslationOverlayController.showMessage(
+                this,
+                "No readable text was found on this screen.",
+            )
+            return
+        }
+        ScreenTranslationOverlayController.show(this, blocks)
+    }
+
+    private fun parseTranslatedScreenBlock(
+        value: Any?,
+    ): TranslatedScreenBlock? {
+        val map = value as? Map<*, *> ?: return null
+        val translatedText =
+            map["translatedText"]?.toString()?.trim().orEmpty()
+        if (translatedText.isEmpty()) return null
+        fun number(key: String): Float =
+            (map[key] as? Number)?.toFloat() ?: 0f
+        val width = number("width")
+        val height = number("height")
+        if (width <= 0f || height <= 0f) return null
+        return TranslatedScreenBlock(
+            translatedText = translatedText,
+            x = number("x"),
+            y = number("y"),
+            width = width,
+            height = height,
+        )
+    }
+
+    private fun showProcessingBubble(actionType: String = "translate") {
+        if (processingBubble != null) return
+
+        val bubble = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 48f
+                setColor(Color.parseColor("#2D3748"))
+            }
+            elevation = 8f
+            setPadding(32, 24, 32, 24)
+        }
+
+        val progressBar = ProgressBar(this).apply {
+            val size = (24 * resources.displayMetrics.density).toInt()
+            layoutParams = LinearLayout.LayoutParams(size, size)
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        }
+
+        val messageText = when (actionType) {
+            "grammar" -> "Checking grammar..."
+            "screen" -> "Reading and translating screen..."
+            else -> "Translating..."
+        }
+        val text = TextView(this).apply {
+            text = messageText
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            setPadding(24, 0, 0, 0)
+        }
+
+        bubble.addView(progressBar)
+        bubble.addView(text)
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = 180
+            y = 200
+        }
+
+        windowManager?.addView(bubble, params)
+        processingBubble = bubble
+    }
+
+    private fun hideProcessingBubble() {
+        processingBubble?.let {
+            windowManager?.removeView(it)
+            processingBubble = null
+        }
+    }
+
 }

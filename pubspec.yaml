@@ -20,6 +20,10 @@ dependencies:
   # HTTP client
   http: ^1.2.0
 
+  # Zip packing/unpacking for the Sarvam Vision document-digitization job,
+  # which only accepts a PDF or ZIP upload and returns its output as a ZIP.
+  archive: ^3.6.1
+
   # Utilities
   provider: ^6.1.1
 
