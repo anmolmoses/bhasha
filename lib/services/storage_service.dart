@@ -23,6 +23,7 @@ class StorageService {
   static const String _autoDetectKey = 'auto_detect_language';
   static const String _autoFlipKey = 'auto_flip_language_pair';
   static const String _floatingActionKey = 'floating_action_type';
+  static const String _speakAloudKey = 'speak_translations_enabled';
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -144,6 +145,15 @@ class StorageService {
     // default so an upgraded install does not start on a dead action.
     if (stored == 'translate' || stored == 'grammar') return stored!;
     return 'translate';
+  }
+
+  // Speak Aloud (Bulbul playback of overlay results)
+  Future<void> saveSpeakAloud(bool enabled) async {
+    await _prefs?.setBool(_speakAloudKey, enabled);
+  }
+
+  bool getSpeakAloud() {
+    return _prefs?.getBool(_speakAloudKey) ?? true;
   }
 
   // Clear all data

@@ -1,87 +1,144 @@
-# Bhasha Quick Start
+# Quick Start Guide
 
-Bhasha is an Android translation and grammar assistant powered by Sarvam AI.
+Get Bhasha up and running in 5 minutes!
 
-## Developer setup
+## Prerequisites Checklist
 
-```sh
-cd /Users/anmolmoses/work/personal/bhasha
+- [ ] Flutter SDK installed (run `flutter --version` to check)
+- [ ] Android device or emulator ready
+- [ ] Sarvam API key (get from dashboard.sarvam.ai)
+
+## Setup Commands
+
+```bash
+# 1. Navigate to project
+cd /path/to/bhasha
+
+# 2. Install dependencies and validate
 flutter pub get
 flutter analyze
 flutter test
+
+# 3. Run the app
+flutter run
+```
+
+To build the debug APK instead:
+
+```bash
 flutter build apk --debug
+# written to build/app/outputs/flutter-apk/app-debug.apk
 ```
 
-The debug APK is written to:
+## Post-Installation
 
-```text
-build/app/outputs/flutter-apk/app-debug.apk
-```
+Once the app launches:
 
-## First launch
+1. **Onboarding**: Follow the setup steps
+2. **Languages**: Select Kannada → English (or your preferred pair)
+3. **API Key**: Paste your Sarvam API key (starts with "sk_") — the app verifies it with Sarvam
+4. **Floating assistant**: In Settings, grant the overlay permission, enable the Bhasha Accessibility Service, and turn on the bubble
+5. **Test**: Try translating some text!
 
-1. Open Bhasha and complete onboarding.
-2. Add a Sarvam API key, or use the configured subscription key.
-3. Choose the source and target languages.
-5. Open Settings and enable only the integrations you want.
+Android requires the user to grant overlay, accessibility, screen-capture, and keyboard access from system settings. Bhasha cannot silently enable them.
 
-## Double-tap screen translation
+## Common Issues
 
-1. Save your Sarvam API key.
-2. Enable **Double-tap screen translation** and accept its disclosure.
-3. Enable the floating bubble.
-4. Open WhatsApp or any other app with visible text.
-5. Double-tap the floating bubble and approve Android's capture prompt.
-6. Read the white Sarvam translation labels and tap anywhere to close.
+### "Command not found: flutter"
 
-Bhasha reads the screen through Accessibility where it can, and falls back to
-one in-memory screenshot for Sarvam Vision OCR. Extracted text—not the
-screenshot—is sent to Sarvam for translation.
+- Flutter not in PATH
+- Install from: https://flutter.dev/docs/get-started/install
 
-## Contextual translation across apps
+### "No devices found"
 
-1. In Settings, turn on **Contextual translate across apps**.
-2. Read and accept the disclosure.
-3. Enable the Bhasha accessibility service when Android opens its settings.
-4. Open a messaging or social app.
-5. Long-press a text message and tap **भ Translate**.
-6. Copy the Sarvam translation or insert it into the reply composer.
+- Start Android emulator or connect physical device
+- Enable USB debugging on phone
 
-This feature is opt-in. Bhasha detects compatible accessible text locally.
-The selected message is sent to Sarvam only after you tap Translate. Bhasha
-does not send the whole conversation.
+### "Gradle build failed"
 
-## General floating button
+- Run `flutter doctor` and verify `android/local.properties`
+- Retry `flutter clean && flutter pub get`
+- Open `android/` folder in Android Studio and let it download dependencies
 
-1. Select Floating Button mode.
-2. Grant **Display over other apps** permission.
-3. Enable the overlay bubble.
-4. Focus an editable text field in an app and single-tap the bubble.
+### "API Error"
 
-The general bubble translates or corrects the focused field. It remains
-available independently of the contextual feature.
+- Verify API key is correct
+- Check your credits on dashboard.sarvam.ai
+- Ensure internet connection is working
 
-## Custom keyboard
+## Testing the App
 
-1. Select Custom Keyboard mode.
-2. Open Android keyboard settings.
-3. Enable **Bhasha Keyboard** and select it as the active keyboard.
+### Test Translation
 
-Android requires the user to grant overlay, accessibility, and keyboard access
-from system settings. Bhasha cannot silently enable them.
+1. Open app
+2. Type: "ನಾನು ಚೆನ್ನಾಗಿದ್ದೇನೆ" (Kannada)
+3. Tap Translate
+4. Should output: "I am fine" (English), and read it aloud
 
-## Troubleshooting
+### Test the Floating Bubble
 
-- No contextual Translate chip: confirm the toggle and accessibility service
-  are enabled, then long-press visible text exposed by the source app.
-- No floating button: grant **Display over other apps** and enable the bubble.
-- Double tap opens Bhasha instead: save your Sarvam key and enable
-  **Double-tap screen translation**.
-- No screen result: approve Android capture, use a non-secure screen with
-  readable text, and verify both API keys.
-- Translation fails: verify the Sarvam key/subscription and internet access.
-- Build fails: run `flutter doctor`, verify `android/local.properties`, then
-  retry `flutter clean && flutter pub get`.
+1. Go to Settings
+2. Grant overlay permission and enable the accessibility service
+3. Turn on "Floating bubble active"
+4. Go to any app with a text field (like Notes or WhatsApp)
+5. Type some Kannada, keep the field focused, and tap the bubble
+6. The text is replaced with English in place — tap **Undo** if you want the original back
 
-See `SETUP.md`, `USER_GUIDE.md`, and `WHATSAPP_CONTEXTUAL_TRANSLATE.html` for
-the full behavior and implementation notes.
+### Test Hold-to-Speak
+
+1. Tap into a text field in any app
+2. Press and hold the bubble — it turns red and shows "Listening…"
+3. Speak in Kannada (or mix in English words)
+4. Release — the English text is appended to the field
+
+### Test Grammar Check
+
+1. In Settings, set One-Tap Action to "Grammar"
+2. In any app, type: "I is going to school"
+3. Tap the bubble
+4. Should be replaced with: "I am going to school"
+
+### Test Double-Tap Screen Translation
+
+1. In Settings, enable **Double-tap screen translation** and accept its disclosure
+2. Open WhatsApp or any other app with visible text
+3. Double-tap the floating bubble and approve Android's capture prompt if asked
+4. Read the white Sarvam translation labels and tap anywhere to close
+
+Bhasha reads the screen through Accessibility where it can (about a second, no capture). Otherwise it takes one in-memory screenshot for Sarvam Vision OCR, which takes roughly 10–25 seconds. Extracted text — not the screenshot — is sent to Sarvam for translation, and the frame is never saved.
+
+Troubleshooting the double tap:
+
+- Double tap does nothing or opens Bhasha: enable **Double-tap screen translation** in Settings first.
+- No screen result: approve Android capture, use a non-secure screen with readable text, and verify the Sarvam key.
+- Tap twice quickly without moving the bubble.
+
+Note: Settings also shows a **Contextual translate across apps** toggle. Its long-press flow is not wired up in this build; use double-tap screen translation to read messages.
+
+## Next Steps
+
+- Read USER_GUIDE.md for detailed usage instructions
+- Read SETUP.md for advanced configuration
+- Customize languages, voice, pace, and tone in Settings
+
+## Support
+
+- Check documentation: README.md, USER_GUIDE.md, SETUP.md
+- Review code in `lib/` folder
+- Test thoroughly before giving to your parents
+
+## For Your Parents
+
+Once set up, show them:
+
+1. How to tap into a message box
+2. How to tap the bubble to translate what they typed
+3. How to press and hold the bubble to speak a message
+4. How to double-tap the bubble to read a screen they can't understand
+5. How to tap Undo if the replacement isn't right
+
+Practice with them a few times so they're comfortable!
+
+---
+
+**Pro Tip**: The hold-to-speak flow is often easiest for first-time users — no typing at all.

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../models/parent_profile.dart';
+import '../services/parent_profile_service.dart';
 import '../services/platform_service.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
@@ -19,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
   final _storage = StorageService();
   final _platform = PlatformService();
+  final _profileService = ParentProfileService();
 
   late String _sourceLang;
   late String _targetLang;
@@ -31,6 +34,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _contextualTranslateEnabled = false;
   bool _screenTranslationEnabled = false;
   String _floatingActionType = 'translate';
+  ParentProfile _profile = const ParentProfile();
+  bool _speakAloud = true;
 
   @override
   void initState() {
@@ -86,6 +91,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     _autoDetect = _storage.getAutoDetect();
     _autoFlip = _storage.getAutoFlip();
     _floatingActionType = _storage.getFloatingActionType();
+    _speakAloud = _storage.getSpeakAloud();
+    _profile = await _profileService.load();
     _apiKey = await _storage.getSarvamApiKey();
 
     // Check permissions
@@ -258,6 +265,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                       _buildOneTapSettings(),
                       const SizedBox(height: 24),
                       _buildLanguageSettings(),
+                      const SizedBox(height: 24),
+                      _buildVoiceMemorySettings(),
                       const SizedBox(height: 24),
                       _buildGrammarCheckSection(),
                       const SizedBox(height: 24),
@@ -648,6 +657,194 @@ class _SettingsScreenState extends State<SettingsScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildVoiceMemorySettings() {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(
+            headline: 'Voice & Memory',
+            subtitle:
+                'How Bhasha sounds and what it remembers. Saved on this phone.',
+          ),
+          const SizedBox(height: 18),
+          _buildSwitchRow(
+            title: 'Speak translations aloud',
+            subtitle: 'Read every bubble result with your chosen voice.',
+            value: _speakAloud,
+            onChanged: (value) async {
+              await _storage.saveSpeakAloud(value);
+              setState(() => _speakAloud = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: ParentProfile.selectableSpeakers
+                    .contains(_profile.voiceSpeaker)
+                ? _profile.voiceSpeaker
+                : ParentProfile.defaultSpeaker,
+            decoration: const InputDecoration(
+              labelText: 'Voice',
+              border: OutlineInputBorder(),
+            ),
+            items: ParentProfile.selectableSpeakers
+                .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                .toList(),
+            onChanged: (speaker) async {
+              if (speaker == null) return;
+              final updated = await _profileService
+                  .update((p) => p.copyWith(voiceSpeaker: speaker));
+              setState(() => _profile = updated);
+            },
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Speaking pace: ${_profile.pace.toStringAsFixed(1)}×',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          Slider(
+            value: _profile.pace.clamp(0.5, 2.0),
+            min: 0.5,
+            max: 2.0,
+            divisions: 15,
+            label: '${_profile.pace.toStringAsFixed(1)}×',
+            onChanged: (pace) =>
+                setState(() => _profile = _profile.copyWith(pace: pace)),
+            onChangeEnd: (pace) async {
+              final updated =
+                  await _profileService.update((p) => p.copyWith(pace: pace));
+              setState(() => _profile = updated);
+            },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Reply tone',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: ReplyTone.values
+                .map(
+                  (tone) => ChoiceChip(
+                    label: Text(tone.label),
+                    selected: _profile.tone == tone,
+                    onSelected: (selected) async {
+                      if (!selected) return;
+                      final updated = await _profileService
+                          .update((p) => p.copyWith(tone: tone));
+                      setState(() => _profile = updated);
+                    },
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Names Bhasha must spell correctly',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _addGlossaryEntry,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add'),
+              ),
+            ],
+          ),
+          if (_profile.glossary.isEmpty)
+            Text(
+              'A child\'s name, a medicine, a school - anything models '
+              'misspell. Saved once, used in every correction.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            )
+          else
+            ...(_profile.glossary.map(
+              (entry) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text('${entry.source} → ${entry.target}'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: 'Remove',
+                  onPressed: () async {
+                    await _profileService.removeGlossaryEntry(entry.source);
+                    setState(() => _profile = _profileService.profile);
+                  },
+                ),
+              ),
+            )),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addGlossaryEntry() async {
+    final sourceController = TextEditingController();
+    final targetController = TextEditingController();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add a name or term'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: sourceController,
+              decoration: const InputDecoration(
+                labelText: 'As you say it',
+                hintText: 'e.g. ಅಭಿಜ್ಞಾ',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: targetController,
+              decoration: const InputDecoration(
+                labelText: 'How it must be written',
+                hintText: 'e.g. Abhijna',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true) {
+      await _profileService.addGlossaryEntry(
+        GlossaryEntry(
+          source: sourceController.text.trim(),
+          target: targetController.text.trim(),
+        ),
+      );
+      setState(() => _profile = _profileService.profile);
+    }
+
+    sourceController.dispose();
+    targetController.dispose();
   }
 
   Widget _buildGrammarCheckSection() {

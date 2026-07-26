@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../constants/languages.dart';
+import '../l10n/parent_strings.dart';
 import '../models/sarvam_error.dart';
+import '../services/parent_profile_service.dart';
 import '../services/platform_service.dart';
 import '../services/sarvam_service.dart';
 import '../services/storage_service.dart';
+import '../services/tts_player.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/one_tap_hero.dart';
@@ -32,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _result = '';
   bool _isLoading = false;
   bool _isSettingUp = false;
+  bool _isSpeaking = false;
 
   // One-Tap Status
   bool _overlayPermissionGranted = false;
@@ -183,7 +187,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _isLoading = false;
       });
-      _showMessage(e.parentMessage);
+      _showMessage(ParentStrings.localize(e.parentMessage));
+    }
+  }
+
+  /// Reads the translation aloud with the parent's saved Bulbul voice, so an
+  /// English message pasted in can be *heard* in Kannada, not just read.
+  Future<void> _speakResult() async {
+    if (_result.isEmpty) return;
+    if (_isSpeaking) {
+      await TtsPlayer().stop();
+      if (mounted) setState(() => _isSpeaking = false);
+      return;
+    }
+
+    final targetCode =
+        Languages.codeFor(_targetLang) ?? Languages.defaultTargetCode;
+    setState(() => _isSpeaking = true);
+    try {
+      final profile = ParentProfileService().profile;
+      final audio = await _sarvam.textToSpeech(
+        text: _result,
+        targetLanguageCode: targetCode,
+        speaker: profile.voiceSpeaker,
+        pace: profile.pace,
+      );
+      await TtsPlayer().play(audio);
+    } on SarvamException catch (e) {
+      _showMessage(ParentStrings.localize(e.parentMessage));
+    } finally {
+      if (mounted) setState(() => _isSpeaking = false);
     }
   }
 
@@ -560,6 +593,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         fontWeight: FontWeight.w700,
                       ),
                 ),
+              ),
+              IconButton(
+                onPressed: _speakResult,
+                icon: Icon(
+                  _isSpeaking
+                      ? Icons.stop_circle_outlined
+                      : Icons.volume_up_rounded,
+                  color: Colors.white,
+                ),
+                tooltip: _isSpeaking ? 'Stop' : 'Listen',
               ),
               IconButton(
                 onPressed: _copyToClipboard,

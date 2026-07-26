@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/parent_strings.dart';
 import '../models/sarvam_error.dart';
 import '../services/sarvam_service.dart';
 import '../theme/app_theme.dart';
@@ -74,7 +75,7 @@ class _ApiKeyInputState extends State<ApiKeyInput> {
       message = 'Key saved and verified with Sarvam.';
     } on SarvamException catch (e) {
       state = _CheckState.failed;
-      message = e.parentMessage;
+      message = ParentStrings.localize(e.parentMessage);
     }
 
     if (mounted) {

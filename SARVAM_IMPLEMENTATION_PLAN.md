@@ -4,7 +4,12 @@ Companion to `SARVAM_BUILDATHON.md`. That document is the **product and acceptan
 source of truth**; this one is the **engineering plan**: which Sarvam APIs we call,
 what replaces OpenAI, what the architecture has to change, and in what order we build.
 
-- **Status:** planning only. No feature code written yet.
+- **Status:** executed. This document is kept as the historical engineering plan.
+  OpenAI has been fully removed, `lib/services/sarvam_service.dart` and the overlay
+  voice flow are on main, and the four parent-experience features (Bulbul playback,
+  undo after replacement, persistent parent profile, Kannada parent-facing strings)
+  have landed. See `PROJECT_STATUS.md` for the current state; some should-have items
+  (streaming STT, share-intent voice notes, pronunciation dictionary) were not built.
 - **API facts verified against:** `docs.sarvam.ai`, 26 July 2026. Every endpoint,
   field name, model id, and limit below was read from the live docs, not recalled.
 - **Scope change from `SARVAM_BUILDATHON.md`:** that spec permitted OpenAI to stay
@@ -452,7 +457,11 @@ Unit tests, no live API — `http.Client` injected and mocked.
 
 ---
 
-## 10. Current environment
+## 10. Environment at planning time (26 July 2026 snapshot)
+
+This table records the environment when the plan was written; it is not the current
+state. `test/` now exists (Sarvam parsing, typed errors, chunking, language table,
+and voice-translate tests).
 
 | Item | State |
 |---|---|

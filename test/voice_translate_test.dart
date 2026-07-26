@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bhasha/l10n/parent_strings.dart';
 import 'package:bhasha/services/overlay_request_handler.dart';
 import 'package:bhasha/services/sarvam_service.dart';
 import 'package:bhasha/services/storage_service.dart';
@@ -26,6 +27,7 @@ void main() {
 
   late Directory tempDir;
   late File audio;
+  late List<(String, String)> spokenAloud;
 
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('bhasha_voice');
@@ -41,9 +43,16 @@ void main() {
     SharedPreferences.setMockInitialValues({'target_language': 'Kannada'});
     await StorageService().init();
     OverlayRequestHandler().init();
+    // Bulbul playback needs a real audio device; stub it out here and assert
+    // against the recorded calls instead.
+    spokenAloud = [];
+    OverlayRequestHandler().overrideSpeakForTesting(
+      (text, languageCode) async => spokenAloud.add((text, languageCode)),
+    );
   });
 
   tearDown(() {
+    OverlayRequestHandler().overrideSpeakForTesting(null);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(secureStorageChannel, null);
     tempDir.deleteSync(recursive: true);
@@ -108,6 +117,25 @@ void main() {
     expect(result['sourceLang'], 'en-IN');
     expect(result['targetLang'], 'kn-IN');
     expect(paths, [SarvamService.sttPath, SarvamService.translatePath]);
+    expect(spokenAloud, [('ನಾಳೆ ಬರುತ್ತೇನೆ', 'kn-IN')],
+        reason: 'the inserted reply is also read aloud in the target language');
+  });
+
+  test('turning the speak-aloud switch off silences playback', () async {
+    SharedPreferences.setMockInitialValues({
+      'target_language': 'Kannada',
+      'speak_translations_enabled': false,
+    });
+    await StorageService().init();
+
+    OverlayRequestHandler().overrideServiceForTesting(sarvamReturning(
+      transcript: 'I will come tomorrow',
+      detectedLanguage: 'en-IN',
+    ));
+
+    await holdToSpeak(audioPath: audio.path);
+
+    expect(spokenAloud, isEmpty);
   });
 
   test('speech already in the target language skips the translate round trip',
@@ -163,11 +191,18 @@ void main() {
       detectedLanguage: 'en-IN',
     ));
 
+    // The parent's language defaults to Kannada, so the failure must arrive
+    // in Kannada - an English error is unreadable to the declared user.
     await expectLater(
       holdToSpeak(audioPath: null),
       throwsA(isA<PlatformException>()
           .having((e) => e.code, 'code', 'invalid_arguments')
-          .having((e) => e.message, 'message', contains('Hold the button'))),
+          .having(
+            (e) => e.message,
+            'message',
+            ParentStrings
+                .kannada['No recording was captured. Hold the button and speak.'],
+          )),
     );
   });
 
@@ -181,7 +216,12 @@ void main() {
       holdToSpeak(audioPath: audio.path),
       throwsA(isA<PlatformException>()
           .having((e) => e.code, 'code', 'noSpeechDetected')
-          .having((e) => e.message, 'message', contains('did not hear'))),
+          .having(
+            (e) => e.message,
+            'message',
+            ParentStrings
+                .kannada['I did not hear anything. Hold the button and speak.'],
+          )),
     );
   });
 }

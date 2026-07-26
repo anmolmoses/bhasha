@@ -1,294 +1,105 @@
-# Project Status: Historical Snapshot
+# Project Status
 
-> This file records the original OpenAI-era implementation. It is not the
-> current source of truth. Bhasha now uses Sarvam for language work, OpenAI
-> only for opt-in screen OCR, and includes universal double-tap screen
-> translation plus contextual translation. See `README.md`,
-> `WHATSAPP_CONTEXTUAL_TRANSLATE.html`, and `USER_GUIDE.md` for current status.
-
-## Implementation Date
+## Last Updated
 
 July 26, 2026
 
-## Status: Ready to Run
+## Summary
 
-The Bhasha language assistant app is fully implemented and ready for use!
+Bhasha is a Flutter + native Kotlin Android app built on the Sarvam API. Sarvam is the only inference provider; the earlier OpenAI integration has been removed. The core product is a system-wide floating bubble: tap it to translate or grammar-correct the focused text field in any app, hold it to speak and have the transcribed, translated result inserted for you, or double-tap it to translate everything visible on screen.
 
-## What's Been Completed
+## What Works
 
-### ✅ Todo 1: Flutter Setup
+### Overlay translate and grammar
 
-- [x] Created Flutter project structure
-- [x] Added all dependencies (shared_preferences, http, flutter_secure_storage)
-- [x] Configured AndroidManifest.xml with all required permissions
-- [x] Set up Gradle configuration
-- [x] Created project files (pubspec.yaml, analysis_options.yaml, .gitignore)
+- A draggable floating bubble runs as a foreground service and works over any app.
+- Tap the bubble and the accessibility service reads the focused editable field, sends the text to Sarvam, and replaces it in place — no copying, no app switching.
+- The one-tap action is configurable in Settings: **Translate** (`/translate`, `mayura:v1`) or **Grammar** (`/v1/chat/completions`, `sarvam-105b`).
+- Grammar prompts are shaped by the saved parent profile (tone, approved names) and recent voice turns.
 
-### ✅ Todo 2: Storage Service
+### Hold-to-speak voice translation
 
-- [x] Implemented StorageService with flutter_secure_storage for API keys
-- [x] Added SharedPreferences for user settings
-- [x] Implemented methods for all preference types
-- [x] Added secure API key encryption
-- [x] Created first-time setup detection
+- Press and hold the bubble to record; release to process.
+- Audio goes to `/speech-to-text` (`saaras:v3`); if the speech is not already in the target language, the transcript is translated with Mayura.
+- The result is appended to the focused field, so held recordings never destroy typed text.
+- Recording is capped at 28 seconds (Sarvam's REST speech endpoint rejects audio over 30) with a visible countdown.
+- Temporary audio files are deleted as soon as the request finishes, success or failure.
 
-### ✅ Todo 3: OpenAI Integration
+### Spoken playback (Bulbul TTS)
 
-- [x] Created OpenAIService class
-- [x] Implemented translate() method with customizable languages
-- [x] Implemented checkGrammar() method
-- [x] Added detectLanguage() capability
-- [x] Implemented error handling and loading states
-- [x] Used GPT-3.5-turbo for cost efficiency
+- Results are spoken aloud with `/text-to-speech` (`bulbul:v3`), both in-app and after overlay actions.
+- Playback uses the parent's saved voice speaker and pace.
 
-### ✅ Todo 4: Settings UI
+### Undo
 
-- [x] Built comprehensive settings screen
-- [x] Created onboarding flow (3 pages)
-- [x] Implemented home screen with tabs
-- [x] Created language picker widget
-- [x] Created API key input widget
-- [x] Added mode selection UI
-- [x] Implemented Material Design 3 theme
+- After the bubble replaces text in a field, an Undo pill appears for a few seconds and restores the original text if tapped.
 
-### ✅ Todo 5: Floating Button
+### Parent profile memory
 
-- [x] Implemented OverlayService.kt in native Android
-- [x] Created foreground service with notification
-- [x] Implemented draggable floating button
-- [x] Created dialog interface for translation
-- [x] Set up method channels in MainActivity.kt
-- [x] Added permission checking and requesting
-- [x] Integrated with Flutter UI controls
+- `lib/services/parent_profile_service.dart` persists the parent's voice speaker, speaking pace, reply tone, and approved-names glossary under the `parent_profile_v1` key. These survive app restarts and shape grammar and rewrite prompts.
+- Recent voice turns are kept in a bounded in-memory conversation context that grounds grammar fixes. Full message history is never persisted.
 
-### ✅ Todo 6: Custom Keyboard
+### Kannada parent-facing strings
 
-- [x] Implemented CustomKeyboardIME.kt
-- [x] Created QWERTY keyboard layout (qwerty.xml)
-- [x] Added toolbar with Translate and Grammar buttons
-- [x] Implemented InputMethodService properly
-- [x] Created method.xml for IME configuration
-- [x] Added keyboard_view.xml layout
-- [x] Integrated with Android keyboard system
+- Overlay toasts, the status pill, and error messages render in Kannada when the parent's language is Kannada.
 
-### ✅ Todo 7: Testing & Polish
+### Double-tap screen translation
 
-- [x] Added comprehensive error handling
-- [x] Implemented loading states throughout
-- [x] Added user-friendly error messages
-- [x] Created extensive documentation
-- [x] Added edge case handling (no internet, invalid API key, etc.)
-- [x] Improved UX with Material Design
-- [x] Added copy to clipboard functionality
-- [x] Implemented language swapping
+- Double-tap the bubble to translate everything visible on screen; the result is drawn as labels over the original text, and tapping anywhere dismisses it.
+- Off by default. Enabling it in Settings shows an explicit disclosure, and the OCR fallback additionally requires Android's own screen-capture prompt.
+- Two read paths, preferring the first: the accessibility tree (exact text and bounds, no screen capture, ~1 second — the only path that works on a WhatsApp chat, whose wallpaper defeats the document model), and Sarvam Vision OCR (`/doc-digitization/job/v1`) when the tree yields nothing readable. The OCR job takes roughly 10–25 seconds and the single captured frame stays in memory, never written to disk.
 
-## Additional Deliverables
+### App fundamentals
 
-### Documentation (4 comprehensive guides)
+- Onboarding: language pair selection and Sarvam key entry, with a live key verification round trip.
+- The Sarvam API key is stored with `flutter_secure_storage` (Android Keystore-backed); language and profile preferences use `shared_preferences`.
+- 23 supported languages: Sarvam's 22 Indian languages plus English (`lib/constants/languages.dart`).
+- Typed Sarvam errors, request-size handling, and unit tests in `test/` for response parsing, errors, the language table, and the voice-translate path.
 
-1. **README.md** - Project overview and features
-2. **SETUP.md** - Detailed setup and troubleshooting (267 lines)
-3. **USER_GUIDE.md** - Complete user manual (384 lines)
-4. **QUICKSTART.md** - 5-minute quick start guide
-5. **IMPLEMENTATION_SUMMARY.md** - Technical overview (580 lines)
+## What Is Scaffolded
 
-### Code Structure
+- **Custom keyboard (IME)**: `CustomKeyboardIME.kt` is registered with Android and includes a QWERTY layout and a toolbar with Translate and Grammar buttons, but those handlers are placeholder stubs — they are not connected to Sarvam. The floating bubble is the complete workflow.
+- **Contextual long-press message translation**: the Settings toggle, consent dialog, `translate_message` handler, and the WhatsApp/generic UI adapters exist, but the accessibility service does not yet subscribe to long-press events, so the "long-press a message → Translate button" flow is not wired end to end.
 
-- 9 Dart files in lib/
-- 3 Kotlin files for native Android
-- 4 XML resource files
-- Complete Gradle configuration
-- All necessary Android resources
+## Deliberately Out of Scope on This Branch
 
-## File Count
+- Automatic message sending (the parent always presses Send themselves).
+- Continuous screen or microphone monitoring. Screen translation runs only on an explicit double-tap; the app does not declare the accessibility screenshot capability, and the MediaProjection fallback captures a single frame after Android's own consent prompt.
+- iOS support.
+- Any backend — requests go directly from the device to Sarvam.
 
-- Dart/Flutter: 13 files
-- Kotlin: 3 files
-- XML: 5 files
-- Gradle: 3 files
-- Documentation: 6 files
-- Configuration: 4 files
-- **Total: 34 files created**
+## Known Limitations
 
-## Lines of Code
-
-- Dart/Flutter: ~2,500 lines
-- Kotlin: ~500 lines
-- XML: ~200 lines
-- Documentation: ~1,500 lines
-- **Total: ~4,700 lines**
-
-## Features Implemented
-
-### Core Features
-
-- [x] Translation between any languages
-- [x] Grammar and spelling checking
-- [x] Floating button overlay mode
-- [x] Custom keyboard IME mode
-- [x] 35+ languages support
-- [x] Secure API key storage
-- [x] Local preferences storage
-
-### UI Features
-
-- [x] Onboarding flow
-- [x] Home screen with tabs
-- [x] Settings screen
-- [x] Language selection dialogs
-- [x] API key input with visibility toggle
-- [x] Mode selection
-- [x] Copy to clipboard
-- [x] Loading indicators
-- [x] Error messages
-
-### Technical Features
-
-- [x] Method channels for Flutter ↔ Native communication
-- [x] Foreground service for persistent overlay
-- [x] Custom IME implementation
-- [x] Encrypted secure storage
-- [x] Async/await API calls
-- [x] Error handling
-- [x] Permission management
+- Android only.
+- Overlay and accessibility access require manual approval in Android settings.
+- One-tap replacement depends on the target app exposing an editable accessibility node; behavior varies by app.
+- Hold-to-speak is capped at 28 seconds.
+- The screen-translation OCR fallback runs as an asynchronous Sarvam Vision job and takes roughly 10–25 seconds; Sarvam Vision is a document model and struggles with screens drawn over photo backgrounds.
+- The custom keyboard's AI actions are not implemented.
+- The release build uses debug signing and is not configured for Play Store distribution.
 
 ## How to Run
 
 ```bash
-# 1. Install dependencies
-cd /Users/anmolmoses/Documents/anmol/bhasha
 flutter pub get
-
-# 2. Create local.properties (one-time)
-cat > android/local.properties << EOF
-sdk.dir=$HOME/Library/Android/sdk
-flutter.sdk=$(which flutter | sed 's:/bin/flutter::')
-EOF
-
-# 3. Run the app
 flutter run
 ```
 
-## Testing Checklist
+On first launch, complete onboarding with a Sarvam API key from https://dashboard.sarvam.ai, then enable the overlay and accessibility permissions from Settings.
 
-Ready to test these features:
+## Verification
 
-- [ ] Launch app and complete onboarding
-- [ ] Enter OpenAI API key
-- [ ] Select Kannada → English
-- [ ] Test translation in app
-- [ ] Test grammar check in app
-- [ ] Enable floating button mode
-- [ ] Grant overlay permission
-- [ ] Test floating button in another app
-- [ ] Enable keyboard mode
-- [ ] Test keyboard in another app
-- [ ] Verify settings save correctly
-- [ ] Test language switching
-- [ ] Test copy to clipboard
-
-## Known Requirements
-
-### Before Running
-
-1. Flutter SDK installed (3.0+)
-2. Android SDK and tools
-3. Android device or emulator
-4. OpenAI API key
-
-### First Run
-
-1. Complete onboarding
-2. Enter API key
-3. Select languages
-4. Choose mode
-5. Grant permissions
-
-## What Your Parents Will See
-
-1. **First Launch**
-   - Welcome screen with app features
-   - Language selection (choose Kannada and English)
-   - API key entry (you'll set this up for them)
-2. **Main Screen**
-   - Big text input area
-   - "Translate" and "Grammar Check" buttons
-   - Easy to understand layout
-3. **Floating Button** (Recommended)
-   - Small "T" button floating on screen
-   - Tap to translate
-   - Works in WhatsApp, Messages, Email, etc.
-4. **Results**
-   - Clear display of translated text
-   - Easy copy button
-   - Can paste anywhere
-
-## Success Metrics
-
-✅ Complete feature parity with requirements
-✅ Clean, maintainable code structure
-✅ Comprehensive documentation
-✅ Security best practices implemented
-✅ User-friendly interface
-✅ Production-ready quality
-
-## Project Timeline
-
-- **Planning**: 5 minutes (clarifying questions)
-- **Implementation**: ~2 hours
-- **Documentation**: 30 minutes
-- **Total**: ~2.5 hours
-
-## Next Actions for You
-
-### Immediate (Next 10 minutes)
-
-1. Run `flutter pub get` to install dependencies
-2. Create android/local.properties file
-3. Run `flutter run` to launch app
-4. Complete onboarding with your OpenAI API key
-
-### Short Term (This week)
-
-1. Test all features thoroughly
-2. Show parents how to use the floating button
-3. Practice translations together
-4. Customize languages if needed
-
-### Optional Enhancements
-
-1. Add custom app icon
-2. Add more Indian languages
-3. Implement translation history
-4. Add favorite phrases feature
-5. Consider voice input
+```bash
+flutter analyze
+flutter test
+flutter build apk --debug
+```
 
 ## Support Resources
 
-- **For you**: SETUP.md (technical guide)
-- **For parents**: USER_GUIDE.md (user-friendly guide)
+- **Technical setup**: SETUP.md
+- **For parents**: USER_GUIDE.md and SIMPLE_GUIDE_FOR_PARENTS.md
 - **Quick help**: QUICKSTART.md
 - **Overview**: README.md
-- **Technical details**: IMPLEMENTATION_SUMMARY.md
-
-## Project Success
-
-This project successfully delivers:
-✅ Everything you asked for in the requirements
-✅ Two flexible modes of operation
-✅ Support for any language to any language
-✅ Grammar checking capability
-✅ Secure, privacy-focused design
-✅ Easy-to-use interface for non-technical users
-✅ Comprehensive documentation
-
-**Ready to help your parents communicate better!** 🎉
-
----
-
-**Status**: COMPLETE AND READY TO USE
-**Quality**: PRODUCTION-READY
-**Documentation**: COMPREHENSIVE
-**User Friendliness**: HIGH
-
-Your parents will be able to communicate in English with confidence!
+- **Buildathon spec**: SARVAM_BUILDATHON.md
+- **Demo script**: THREE_MINUTE_DEMO.md

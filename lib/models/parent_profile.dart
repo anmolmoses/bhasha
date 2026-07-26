@@ -89,16 +89,18 @@ class ParentProfile {
 
   static const String defaultSpeaker = 'Kavya';
 
-  /// Curated subset of documented `bulbul:v3` speakers, kept short so the
-  /// settings screen stays scannable for an older user.
+  /// Curated subset of `bulbul:v3` speakers, kept short so the settings
+  /// screen stays scannable for an older user. Every name here was verified
+  /// against the API's own "available speakers" list (the wire format is
+  /// lowercase; SarvamService lowercases on send).
   static const List<String> selectableSpeakers = [
     'Kavya',
     'Priya',
     'Shreya',
     'Ritu',
-    'Kavitha',
+    'Anushka',
     'Anand',
-    'Vijay',
+    'Rohan',
     'Rahul',
   ];
 
@@ -144,7 +146,12 @@ class ParentProfile {
   factory ParentProfile.fromJson(Map<String, dynamic> json) => ParentProfile(
         inputLanguageCode: json['inputLanguageCode'] as String? ?? 'kn-IN',
         replyLanguageCode: json['replyLanguageCode'] as String? ?? 'en-IN',
-        voiceSpeaker: json['voiceSpeaker'] as String? ?? defaultSpeaker,
+        // A speaker saved by an older build may no longer be offered (or was
+        // never valid on the API); falling back beats a silent 400 on every
+        // playback.
+        voiceSpeaker: selectableSpeakers.contains(json['voiceSpeaker'])
+            ? json['voiceSpeaker'] as String
+            : defaultSpeaker,
         pace: (json['pace'] as num?)?.toDouble().clamp(0.5, 2.0) ?? 1.0,
         tone: ReplyTone.fromJson(json['tone'] as String?),
         glossary: (json['glossary'] as List?)

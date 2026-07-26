@@ -7,454 +7,177 @@
 
 ## Project Overview
 
-Bhasha is a complete Android mobile app built with Flutter that helps users translate text between languages and check grammar/spelling using OpenAI's API. It's specifically designed for users like your parents who are comfortable in one language (Kannada) but need help expressing themselves in another (English).
+Bhasha is an Android app built with Flutter and native Kotlin that helps users translate text, correct grammar, and speak messages using the Sarvam API. It is designed for users who are comfortable in one language (Kannada) but need help expressing themselves in another (English). Sarvam is the only inference provider; the earlier OpenAI integration was removed.
 
 ## What Has Been Implemented
 
-### ✅ 1. Flutter Project Setup
+### 1. Flutter Project Setup
 
 - Complete Flutter project structure
-- Dependencies configured (shared_preferences, flutter_secure_storage, http, provider)
+- Dependencies configured (shared_preferences, flutter_secure_storage, http)
 - Android-specific configuration (build.gradle, settings.gradle, AndroidManifest.xml)
 - Analysis options for linting
 - .gitignore for clean repository
 
-### ✅ 2. Storage Service
+### 2. Storage Service
 
 **File**: `lib/services/storage_service.dart`
 
-- Secure API key storage using flutter_secure_storage
-- User preferences storage (languages, mode, settings)
+- Secure Sarvam API key storage using flutter_secure_storage (Android Keystore-backed)
+- Removes any legacy OpenAI key left by earlier installs
+- User preferences storage (languages, settings)
 - First-time setup detection
 - Auto-detect language toggle
-- Grammar check enable/disable
 
-### ✅ 3. OpenAI Integration
+### 3. Sarvam Integration
 
-**File**: `lib/services/openai_service.dart`
+**File**: `lib/services/sarvam_service.dart`
 
-- Translation service with customizable source/target languages
-- Grammar checking service
-- Language detection capability
-- Error handling for API failures
-- Configurable GPT model (currently using gpt-3.5-turbo for cost efficiency)
+- `/speech-to-text` (`saaras:v3`) for hold-to-speak transcription
+- `/translate` (`mayura:v1`) for translation
+- `/text-lid` for source-language detection
+- `/v1/chat/completions` (`sarvam-105b`) for grammar correction and rewriting
+- `/text-to-speech` (`bulbul:v3`) for spoken playback of results
+- Requests authenticate with the `api-subscription-key` header
+- Typed errors, timeouts, request-size chunking, and key verification round trip
 
-### ✅ 4. Platform Service
+### 4. Overlay Request Handling
+
+**File**: `lib/services/overlay_request_handler.dart`
+
+- Routes bubble actions (`translate`, `grammar`, `voice_translate`) from Kotlin to Sarvam
+- Skips the translation round trip when speech is already in the target language
+- Builds grammar prompts from the saved parent profile and recent voice context
+
+### 5. Parent Profile Memory
+
+**File**: `lib/services/parent_profile_service.dart`
+
+- Persists the parent's voice speaker, speaking pace, reply tone, and approved-names glossary under the `parent_profile_v1` key
+- Survives app restarts and shapes grammar/rewrite prompts
+- Recent voice turns are held in a bounded in-memory conversation context; full message history is never persisted
+
+### 6. Platform Service
 
 **File**: `lib/services/platform_service.dart`
 
 - Bridge between Flutter and native Android code
 - Method channels for overlay service control
-- Keyboard settings access
 - Bidirectional communication support
 
-### ✅ 5. Data Models
+### 7. Data Models
 
 **Files**: `lib/models/`
 
-- `translation_result.dart` - Stores translation results
-- `grammar_result.dart` - Stores grammar check results with corrections
-- `app_mode.dart` - Enum for Floating Button vs Keyboard modes
+- `translation_result.dart`, `grammar_result.dart` - Result models
+- `parent_profile.dart` - Voice speaker, pace, tone, glossary
+- `conversation_context.dart` - Bounded in-memory voice context
+- `voice_result.dart`, `sarvam_error.dart` - Voice pipeline and typed errors
+- `app_mode.dart` - Mode enum
 
-### ✅ 6. User Interface
+### 8. User Interface
 
-#### Onboarding Screen (`lib/screens/onboarding_screen.dart`)
+- **Onboarding** (`lib/screens/onboarding_screen.dart`): language selection and Sarvam key entry with verification
+- **Home** (`lib/screens/home_screen.dart`): in-app translation with spoken playback and copy-to-clipboard
+- **Settings** (`lib/screens/settings_screen.dart`): overlay permissions, one-tap action (Translate/Grammar), default languages, API key management, clear-all-data
+- Reusable widgets in `lib/widgets/` (API key input, language picker, cards, buttons)
 
-- 3-page onboarding flow
-- Welcome with feature highlights
-- Language selection
-- API key input with security information
-- Smooth page transitions
+### 9. Native Android Integration
 
-#### Home Screen (`lib/screens/home_screen.dart`)
+**Files**: `android/app/src/main/kotlin/com/yourapp/bhasha/`
 
-- Tabbed interface (Translate / Grammar Check)
-- Language selector with swap functionality
-- Text input area
-- Real-time translation and grammar checking
-- Copy to clipboard functionality
-- Loading states and error handling
-- Mode indicator showing current mode
+- **MainActivity.kt** - Method channel setup, permission checks, service lifecycle
+- **OverlayService.kt** - Foreground service, draggable bubble, tap and press-and-hold gestures, status pill, Undo pill after replacement, Kannada parent-facing strings
+- **BhashaAccessibilityService.kt** - Reads and replaces text in the focused editable field
+- **VoiceCaptureManager.kt** - Microphone capture lifecycle for hold-to-speak
+- **BhashaChannel.kt / BhashaApplication.kt** - Channel and app wiring
+- **CustomKeyboardIME.kt** - Scaffolded IME (see limitations)
 
-#### Settings Screen (`lib/screens/settings_screen.dart`)
+**XML resources**: `accessibility_service_config.xml`, `method.xml`, `qwerty.xml`, `keyboard_view.xml`
 
-- API key configuration with secure storage
-- Mode selection (Floating Button / Custom Keyboard)
-- Language preferences with 35+ languages
-- Auto-detect language toggle
-- Grammar check enable/disable
-- Mode-specific controls:
-  - Floating button toggle
-  - Keyboard settings shortcut
-- Clear all data option
-- Version information
-
-#### Reusable Widgets
-
-- `language_picker.dart` - Language selection dialog
-- `api_key_input.dart` - Secure API key input field
-
-### ✅ 7. Native Android Integration
-
-#### MainActivity.kt
-
-- Method channel setup
-- Overlay permission checks and requests
-- Service lifecycle management
-- Keyboard settings navigation
-
-#### OverlayService.kt (Floating Button Mode)
-
-- Foreground service for persistent floating button
-- Draggable button overlay using WindowManager
-- Dialog interface for text input
-- Translation and grammar check triggers
-- Notification for service status
-
-#### CustomKeyboardIME.kt (Keyboard Mode)
-
-- Custom Input Method Editor (IME)
-- QWERTY keyboard layout
-- Toolbar with Translate and Grammar buttons
-- Integration with Flutter services
-- Text replacement functionality
-
-#### XML Resources
-
-- `method.xml` - IME configuration
-- `qwerty.xml` - Keyboard layout definition
-- `keyboard_view.xml` - Keyboard view layout
-- `styles.xml` - App themes
-
-### ✅ 8. Language Support
+### 10. Language Support
 
 **File**: `lib/constants/languages.dart`
 
-- 35+ languages supported including:
-  - Indian: Kannada, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Punjabi, Malayalam, Urdu
-  - European: English, Spanish, French, German, Italian, Portuguese, Russian, Dutch, Swedish, Polish
-  - Asian: Chinese, Japanese, Korean, Thai, Vietnamese, Indonesian, Malay, Filipino
-  - Others: Arabic, Hebrew, Turkish, Greek
+- 23 languages: Sarvam's 22 Indian languages plus English
+- Kannada, English, Hindi, Tamil, Telugu, Malayalam, Marathi, Bengali, Gujarati, Punjabi, Odia, Assamese, Urdu, Nepali, Konkani, Kashmiri, Sindhi, Sanskrit, Santali, Manipuri, Bodo, Maithili, Dogri
+- Each entry carries the BCP-47 code Sarvam accepts; unsupported names resolve to null so callers fail explicitly instead of sending a bad code
 
-### ✅ 9. Documentation
+## Key Features
 
-- **README.md** - Project overview and features
-- **SETUP.md** - Detailed setup and development guide
-- **USER_GUIDE.md** - Comprehensive user instructions (perfect for your parents!)
-- **QUICKSTART.md** - Get started in 5 minutes
-- **IMPLEMENTATION_SUMMARY.md** - This file
+### 1. System-Wide Floating Bubble
+
+- One tap reads the focused field, processes it with Sarvam, and replaces the text in place
+- Press and hold to speak; the translated result is appended to the field
+- An Undo pill restores the original text for a few seconds after replacement
+- No copying, pasting, or app switching
+
+### 2. Voice
+
+- Hold-to-speak with automatic language detection (no source selection needed)
+- 28-second recording cap with countdown (Sarvam's REST endpoint rejects audio over 30 seconds)
+- Spoken playback of results via Bulbul in the parent's saved voice and pace
+
+### 3. Memory
+
+- Voice speaker, pace, reply tone, and approved-names glossary persist across restarts
+- Bounded in-memory conversation context grounds grammar fixes
+
+### 4. Security & Privacy
+
+- API key stored securely; sent only to Sarvam
+- Recorded audio deleted immediately after each request
+- No translation history stored
+- No accessibility screenshot capability; no screen pixels leave the device
+- Parent-facing overlay strings render in Kannada for Kannada-language parents
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Flutter App                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
-│  │  Onboarding │  │    Home     │  │  Settings   │ │
-│  │   Screen    │  │   Screen    │  │   Screen    │ │
-│  └─────────────┘  └─────────────┘  └─────────────┘ │
-│         │                │                │          │
-│         └────────────────┴────────────────┘          │
-│                          │                           │
-│         ┌────────────────┴───────────────┐           │
-│         │                                │           │
-│  ┌──────▼──────┐              ┌─────────▼────────┐  │
-│  │   Storage   │              │     OpenAI       │  │
-│  │   Service   │              │    Service       │  │
-│  └─────────────┘              └──────────────────┘  │
-│         │                                            │
-│         └──────────────┬─────────────────────────────┤
-│                        │                             │
-│                 ┌──────▼───────┐                     │
-│                 │   Platform   │                     │
-│                 │   Service    │                     │
-│                 └──────┬───────┘                     │
-└────────────────────────┼─────────────────────────────┘
-                         │ Method Channels
-        ┌────────────────┴───────────────┐
-        │      Native Android            │
-        │  ┌──────────┐  ┌─────────────┐ │
-        │  │ Overlay  │  │  Keyboard   │ │
-        │  │ Service  │  │     IME     │ │
-        │  └──────────┘  └─────────────┘ │
-        └────────────────────────────────┘
+Flutter
+├── Screens and widgets
+├── Secure key, preference, and parent-profile storage
+├── Sarvam request and response handling
+└── Platform service and overlay request handler
+             │ MethodChannel
+             ▼
+Native Android (Kotlin)
+├── MainActivity
+├── OverlayService (bubble, gestures, undo, status pill)
+├── BhashaAccessibilityService (read/replace focused field)
+├── VoiceCaptureManager (microphone)
+└── CustomKeyboardIME (scaffolded)
 ```
 
-## Key Features
+## Testing
 
-### 1. Dual Mode Operation
-
-- **Floating Button**: System-wide overlay accessible from any app
-- **Custom Keyboard**: Integrated keyboard with built-in translation
-
-### 2. Flexible Language Support
-
-- Any language to any language translation
-- 35+ languages pre-configured
-- Easy to add more languages
-
-### 3. Grammar Checking
-
-- Powered by OpenAI GPT
-- Works with any language
-- Provides corrected text
-- Identifies corrections made
-
-### 4. Security & Privacy
-
-- API keys stored securely using flutter_secure_storage
-- Encrypted local storage
-- No data sent except to OpenAI
-- No translation history stored
-
-### 5. User-Friendly Interface
-
-- Material Design 3
-- Intuitive navigation
-- Clear error messages
-- Loading states for better UX
-- Copy to clipboard functionality
-
-## Technical Highlights
-
-### Flutter/Dart
-
-- Clean architecture with separation of concerns
-- Service layer for business logic
-- Reusable widgets
-- State management with setState (can be upgraded to Provider/Bloc)
-- Proper error handling
-
-### Android Native
-
-- Kotlin for modern Android development
-- Method channels for Flutter ↔ Native communication
-- Foreground service for persistent overlay
-- Custom IME implementation
-- Proper permission handling
-
-### API Integration
-
-- RESTful API calls to OpenAI
-- Async/await for clean asynchronous code
-- Error handling with try-catch
-- Configurable model selection
-- Token optimization
-
-## File Structure
-
-```
-bhasha/
-├── lib/
-│   ├── main.dart                      # App entry point
-│   ├── constants/
-│   │   └── languages.dart             # Supported languages
-│   ├── models/
-│   │   ├── app_mode.dart              # App mode enum
-│   │   ├── grammar_result.dart        # Grammar result model
-│   │   └── translation_result.dart    # Translation result model
-│   ├── screens/
-│   │   ├── home_screen.dart           # Main app screen
-│   │   ├── onboarding_screen.dart     # First-time setup
-│   │   └── settings_screen.dart       # App settings
-│   ├── services/
-│   │   ├── openai_service.dart        # OpenAI API integration
-│   │   ├── platform_service.dart      # Native bridge
-│   │   └── storage_service.dart       # Local storage
-│   └── widgets/
-│       ├── api_key_input.dart         # API key input widget
-│       └── language_picker.dart       # Language selection widget
-├── android/
-│   ├── app/
-│   │   ├── build.gradle               # App-level Gradle config
-│   │   └── src/main/
-│   │       ├── AndroidManifest.xml    # App manifest
-│   │       ├── kotlin/com/yourapp/bhasha/
-│   │       │   ├── MainActivity.kt    # Main activity
-│   │       │   ├── OverlayService.kt  # Floating button service
-│   │       │   └── CustomKeyboardIME.kt # Keyboard implementation
-│   │       └── res/
-│   │           ├── layout/
-│   │           │   └── keyboard_view.xml
-│   │           ├── values/
-│   │           │   └── styles.xml
-│   │           └── xml/
-│   │               ├── method.xml
-│   │               └── qwerty.xml
-│   ├── build.gradle                   # Project-level Gradle
-│   ├── settings.gradle                # Gradle settings
-│   └── gradle.properties              # Gradle properties
-├── assets/                            # App assets
-├── pubspec.yaml                       # Flutter dependencies
-├── README.md                          # Project overview
-├── SETUP.md                           # Setup guide
-├── USER_GUIDE.md                      # User manual
-├── QUICKSTART.md                      # Quick start
-└── IMPLEMENTATION_SUMMARY.md          # This file
-```
-
-## Next Steps for You
-
-### 1. Initial Setup (5 minutes)
+`test/` covers Sarvam response parsing, typed errors, request-size chunking, the language table, and the voice-translate path.
 
 ```bash
-cd /Users/anmolmoses/Documents/anmol/bhasha
-flutter pub get
-flutter run
+flutter analyze
+flutter test
+flutter build apk --debug
 ```
-
-### 2. Get OpenAI API Key
-
-- Visit https://platform.openai.com
-- Create account and generate API key
-- Add to app during onboarding
-
-### 3. Test Both Modes
-
-- Try floating button mode first (easier)
-- Then test keyboard mode
-- Choose which works better for your use case
-
-### 4. Customize for Your Parents
-
-- Pre-configure Kannada → English
-- Show them the USER_GUIDE.md
-- Practice with them a few times
-- Consider adding more Indian languages if needed
-
-### 5. Optional Enhancements
-
-- Add app icon (currently using default)
-- Customize colors/theme
-- Add more languages in `lib/constants/languages.dart`
-- Implement translation history
-- Add favorite phrases
-- Upgrade to GPT-4 for better accuracy (higher cost)
-
-## Potential Improvements
-
-### Short Term
-
-1. Add translation history with local storage
-2. Implement favorite/saved phrases
-3. Add voice input capability
-4. Offline language detection
-5. Custom app icon
-
-### Medium Term
-
-1. Add more visual feedback during translation
-2. Implement undo/redo functionality
-3. Add text-to-speech for translated text
-4. Support for formatted text (bold, italic)
-5. Share translated text directly to other apps
-
-### Long Term
-
-1. Multi-language translation (translate to multiple languages at once)
-2. Image text recognition (OCR) with translation
-3. Conversation mode (back-and-forth translation)
-4. Offline translation using local models
-5. iOS version
-
-## Testing Checklist
-
-- [ ] App launches successfully
-- [ ] Onboarding flow completes
-- [ ] API key saves securely
-- [ ] Translation works (Kannada → English)
-- [ ] Translation works (English → Kannada)
-- [ ] Grammar check works
-- [ ] Language selection updates
-- [ ] Floating button appears
-- [ ] Floating button is draggable
-- [ ] Floating button dialog works
-- [ ] Keyboard enables in settings
-- [ ] Keyboard appears in other apps
-- [ ] Keyboard translation works
-- [ ] Settings save correctly
-- [ ] Mode switching works
-- [ ] Copy to clipboard works
-- [ ] Error handling shows proper messages
-- [ ] App works without internet (shows error)
-- [ ] App handles invalid API key gracefully
 
 ## Known Limitations
 
-1. **Internet Required**: Translation requires active internet connection
-2. **API Costs**: Each translation costs money (very small, but adds up)
-3. **Android Only**: Currently only supports Android (iOS needs separate implementation)
-4. **English Keyboard**: Custom keyboard layout is English QWERTY only
-5. **No History**: Translations are not saved (by design for privacy)
+1. **Internet required**: All processing calls the Sarvam API
+2. **Android only**: iOS is not supported
+3. **Accessibility variance**: One-tap replacement depends on the target app exposing an editable node
+4. **Keyboard stub**: The custom keyboard's Translate and Grammar actions are placeholders, not connected to Sarvam
+5. **Debug signing**: The release build is not configured for Play Store distribution
+6. **No history**: Translations are not saved (by design for privacy)
 
-## Cost Estimation
+## Costs
 
-Using GPT-3.5-turbo:
-
-- ~$0.002 per 1000 tokens
-- Average translation: ~100-200 tokens
-- Cost per translation: ~$0.0002-$0.0004
-- 100 translations: ~$0.02-$0.04
-- 1000 translations: ~$0.20-$0.40
-
-Very affordable for personal use!
-
-## Security Considerations
-
-1. **API Key Storage**: Encrypted using flutter_secure_storage
-2. **Network**: All API calls use HTTPS
-3. **Permissions**: Only requests necessary permissions
-4. **Privacy**: No analytics, no data collection
-5. **Local Only**: All data stays on device
-
-## Support & Maintenance
-
-### For Development Issues
-
-- Check `flutter doctor` for environment issues
-- Review SETUP.md for configuration
-- Check Gradle sync in Android Studio
-
-### For User Issues
-
-- Refer to USER_GUIDE.md
-- Check OpenAI API status
-- Verify API key has credits
-- Ensure permissions are granted
-
-### For Code Modifications
-
-- Follow existing patterns in codebase
-- Test thoroughly before deploying
-- Update documentation if needed
-- Consider backward compatibility
+Sarvam API usage is billed to the account associated with the key. Monitor usage on https://dashboard.sarvam.ai.
 
 ## Credits
 
 - **Flutter**: Google's UI toolkit
-- **OpenAI**: GPT-3.5/4 for translation and grammar checking
+- **Sarvam AI**: Saaras (speech-to-text), Mayura (translation), Bulbul (text-to-speech), and sarvam-105b (chat) models
 - **Material Design**: Google's design system
 
 ## License
 
 See LICENSE file for details.
-
----
-
-## Final Notes
-
-This is a complete, production-ready app that you can use immediately. The code is well-structured, documented, and follows Flutter best practices.
-
-**For Your Parents**: This app will genuinely help them communicate better in English. The floating button mode is particularly good because they can use it anywhere on their phone without switching apps.
-
-**Personal Touch**: Consider sitting with them the first few times they use it, showing them how to:
-
-1. Tap the floating button
-2. Type in Kannada
-3. Tap "Translate"
-4. Copy the English text
-5. Paste it where they need it
-
-With a bit of practice, they'll be using it confidently!
-
-Good luck with your project! 🚀
