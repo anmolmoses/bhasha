@@ -87,14 +87,44 @@ void main() {
     });
   });
 
+  group('hold-to-speak preference', () {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await StorageService().init();
+    });
+
+    test('defaults on and persists when disabled', () async {
+      expect(StorageService().getHoldToSpeakEnabled(), isTrue);
+
+      await StorageService().saveHoldToSpeakEnabled(false);
+
+      expect(StorageService().getHoldToSpeakEnabled(), isFalse);
+    });
+  });
+
+  group('text-to-speech preference', () {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      await StorageService().init();
+    });
+
+    test('defaults on and persists when disabled', () async {
+      expect(StorageService().getSpeakAloud(), isTrue);
+
+      await StorageService().saveSpeakAloud(false);
+
+      expect(StorageService().getSpeakAloud(), isFalse);
+    });
+  });
+
   group('grammar correction uses the profile and recent dictation', () {
     late Directory tempDir;
     late File audio;
 
     setUp(() async {
       tempDir = Directory.systemTemp.createTempSync('bhasha_memory');
-      audio =
-          File('${tempDir.path}/clip.wav')..writeAsBytesSync(Uint8List(8192));
+      audio = File('${tempDir.path}/clip.wav')
+        ..writeAsBytesSync(Uint8List(8192));
 
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(secureStorageChannel, (call) async {
@@ -186,8 +216,7 @@ void main() {
           reason: 'the saved tone must shape every correction');
       expect(systemPrompt, contains('"ಅಭಿಜ್ಞಾ" must be written as "Abhijna"'),
           reason: 'the approved glossary spelling must be enforced');
-      expect(systemPrompt,
-          contains('Abhijna will not come to school tomorrow'),
+      expect(systemPrompt, contains('Abhijna will not come to school tomorrow'),
           reason: 'what the parent just dictated grounds the correction');
     });
   });
@@ -236,14 +265,17 @@ void main() {
   });
 
   group('bulbul wire format', () {
-    test('the speaker id goes out lowercase, whatever the profile shows', () async {
+    test('the speaker id goes out lowercase, whatever the profile shows',
+        () async {
       // Sarvam rejects 'Kavya' with HTTP 400 but accepts 'kavya'; seen on a
       // real device, so pinned here.
       String? sentSpeaker;
       final client = MockClient((request) async {
         sentSpeaker = (jsonDecode(request.body) as Map)['speaker'] as String?;
         return http.Response(
-          jsonEncode({'audios': ['UklGRg==']}),
+          jsonEncode({
+            'audios': ['UklGRg==']
+          }),
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         );
@@ -283,13 +315,10 @@ void main() {
     });
 
     test('garbage input falls back to the 30-second ceiling', () {
-      expect(TtsPlayer.wavDuration(Uint8List(10)),
-          const Duration(seconds: 30));
-      expect(TtsPlayer.wavDuration(Uint8List(100)),
-          const Duration(seconds: 30),
+      expect(TtsPlayer.wavDuration(Uint8List(10)), const Duration(seconds: 30));
+      expect(TtsPlayer.wavDuration(Uint8List(100)), const Duration(seconds: 30),
           reason: 'no RIFF magic');
-      expect(
-          TtsPlayer.wavDuration(wavOf(byteRate: 0, dataBytes: 1000)),
+      expect(TtsPlayer.wavDuration(wavOf(byteRate: 0, dataBytes: 1000)),
           const Duration(seconds: 30),
           reason: 'a zero byte rate must not divide');
     });

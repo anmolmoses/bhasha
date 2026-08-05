@@ -32,6 +32,7 @@ void main() {
       expect(SarvamService.baseUrl, 'https://api.sarvam.ai');
       expect(SarvamService.sttPath, '/speech-to-text');
       expect(SarvamService.translatePath, '/translate');
+      expect(SarvamService.transliteratePath, '/transliterate');
       expect(SarvamService.ttsPath, '/text-to-speech');
       expect(SarvamService.chatPath, '/v1/chat/completions');
       expect(SarvamService.languageIdPath, '/text-lid');
@@ -40,6 +41,7 @@ void main() {
     test('pins the documented model identifiers', () {
       expect(SarvamService.sttModel, 'saaras:v3');
       expect(SarvamService.translateModel, 'mayura:v1');
+      expect(SarvamService.expandedTranslateModel, 'sarvam-translate:v1');
       expect(SarvamService.ttsModel, 'bulbul:v3');
     });
 
@@ -79,6 +81,56 @@ void main() {
       expect(body['mode'], 'modern-colloquial');
       expect(body['numerals_format'], 'international');
       expect(body['model'], 'mayura:v1');
+    });
+
+    test('Kannada to Konkani translates then converts to Kannada script',
+        () async {
+      final requests = <http.Request>[];
+      final service = SarvamService(
+        keyProvider: () async => 'test-key',
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path == SarvamService.translatePath) {
+            return http.Response.bytes(
+              utf8.encode(jsonEncode({
+                'translated_text': 'हांव येतां',
+                'source_language_code': 'kn-IN',
+              })),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          }
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({'transliterated_text': 'ಹಾಂವ್ ಯೇತಾಂ'})),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      );
+
+      final result = await service.translate(
+        input: 'ನಾನು ಬರುತ್ತೇನೆ',
+        sourceLanguageCode: 'kn-IN',
+        targetLanguageCode: 'kok-IN',
+      );
+
+      expect(result, 'ಹಾಂವ್ ಯೇತಾಂ');
+      expect(requests, hasLength(2));
+
+      final translateBody =
+          jsonDecode(requests[0].body) as Map<String, dynamic>;
+      expect(translateBody['source_language_code'], 'kn-IN');
+      expect(translateBody['target_language_code'], 'kok-IN');
+      expect(translateBody['mode'], 'formal');
+      expect(translateBody['model'], 'sarvam-translate:v1');
+
+      expect(requests[1].url.path, SarvamService.transliteratePath);
+      final transliterateBody =
+          jsonDecode(requests[1].body) as Map<String, dynamic>;
+      expect(transliterateBody['input'], 'हांव येतां');
+      expect(transliterateBody['source_language_code'], 'hi-IN');
+      expect(transliterateBody['target_language_code'], 'kn-IN');
+      expect(transliterateBody['numerals_format'], 'international');
     });
   });
 

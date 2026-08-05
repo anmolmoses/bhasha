@@ -24,6 +24,7 @@ class StorageService {
   static const String _autoFlipKey = 'auto_flip_language_pair';
   static const String _floatingActionKey = 'floating_action_type';
   static const String _speakAloudKey = 'speak_translations_enabled';
+  static const String _holdToSpeakKey = 'hold_to_speak_enabled';
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -154,6 +155,15 @@ class StorageService {
 
   bool getSpeakAloud() {
     return _prefs?.getBool(_speakAloudKey) ?? true;
+  }
+
+  // Hold to speak (microphone capture and Sarvam speech-to-text)
+  Future<void> saveHoldToSpeakEnabled(bool enabled) async {
+    await _prefs?.setBool(_holdToSpeakKey, enabled);
+  }
+
+  bool getHoldToSpeakEnabled() {
+    return _prefs?.getBool(_holdToSpeakKey) ?? true;
   }
 
   // Clear all data

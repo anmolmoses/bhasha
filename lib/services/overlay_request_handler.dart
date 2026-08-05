@@ -87,6 +87,14 @@ class OverlayRequestHandler {
     }
 
     await _adoptOverlayLanguageChoice(arguments);
+    if (action == 'voice_translate' && !_storage.getHoldToSpeakEnabled()) {
+      throw PlatformException(
+        code: 'feature_disabled',
+        message: ParentStrings.localize(
+          'Hold to speak is turned off in Bhasha Settings.',
+        ),
+      );
+    }
     await _ensureApiKey();
 
     try {
@@ -209,16 +217,14 @@ class OverlayRequestHandler {
             '$targetName is not supported. Pick another language in Settings.',
       );
     }
-    final sourceCode =
-        Languages.codeFor(_storage.getSourceLanguage()) ??
+    final sourceCode = Languages.codeFor(_storage.getSourceLanguage()) ??
         Languages.defaultSourceCode;
 
     return LanguagePair(
       sourceCode: sourceCode,
       targetCode: targetCode,
       // A pair of one language has no other side to flip to.
-      autoFlip:
-          _storage.getAutoFlip() &&
+      autoFlip: _storage.getAutoFlip() &&
           !Languages.sameLanguage(sourceCode, targetCode),
     );
   }
@@ -244,9 +250,8 @@ class OverlayRequestHandler {
 
     // Auto-flip has to know what it is looking at, so it detects even when the
     // parent left auto-detect off.
-    final detected = (pair.autoFlip || autoDetect)
-        ? await _detectLanguage(text)
-        : null;
+    final detected =
+        (pair.autoFlip || autoDetect) ? await _detectLanguage(text) : null;
 
     final sourceCode =
         detected ?? Languages.codeFor(_storage.getSourceLanguage());
@@ -299,7 +304,10 @@ class OverlayRequestHandler {
       mode: SaarasMode.transcribe,
     );
     final spoken = heard.transcript.trim();
-    final sourceCode = _resolveSpokenLanguage(heard.languageCode);
+    final sourceCode = _resolveSpokenLanguage(
+      heard.languageCode,
+      fallback: pair.sourceCode,
+    );
 
     // Saaras already told us what was spoken, so auto-flip costs nothing here:
     // speak English and get Kannada, speak Kannada and get English, from the
@@ -342,17 +350,21 @@ class OverlayRequestHandler {
     };
   }
 
-  /// Maps what Saaras reports back onto a code Mayura accepts.
+  /// Maps what Saaras reports back onto a code the translation API accepts.
   ///
-  /// Saaras can return `unknown`, or a language Mayura does not take. Sending
-  /// `auto` in those cases is better than sending a code that 400s.
-  String _resolveSpokenLanguage(String reported) {
+  /// Saaras can return `unknown`. The parent has already selected a source
+  /// language, so that is a safer fallback than `auto`: the expanded Sarvam
+  /// Translate model requires an explicit source code.
+  String _resolveSpokenLanguage(
+    String reported, {
+    required String fallback,
+  }) {
     final code = reported.trim();
-    if (code.isEmpty || code.toLowerCase() == 'unknown') return 'auto';
+    if (code.isEmpty || code.toLowerCase() == 'unknown') return fallback;
     final known = Languages.all.any(
       (language) => language.code.toLowerCase() == code.toLowerCase(),
     );
-    return known ? code : 'auto';
+    return known ? code : fallback;
   }
 
   Future<Map<String, dynamic>> _handleGrammar(String text) async {

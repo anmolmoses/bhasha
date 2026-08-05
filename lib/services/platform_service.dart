@@ -125,6 +125,21 @@ class PlatformService {
     }
   }
 
+  /// Keeps the native overlay's hold gesture in sync with the persisted
+  /// Flutter setting, including while the overlay is already running.
+  Future<bool> setHoldToSpeakEnabled(bool enabled) async {
+    try {
+      final result = await platform.invokeMethod(
+        'setHoldToSpeakEnabled',
+        {'enabled': enabled},
+      );
+      return result as bool;
+    } catch (e) {
+      print('Error updating hold-to-speak setting: $e');
+      return false;
+    }
+  }
+
   // Update floating action type
   Future<void> updateFloatingActionType(String actionType) async {
     try {

@@ -31,6 +31,7 @@ object OverlayStrings {
 
     private val ENGLISH = mapOf(
         "notification_idle" to "Tap to translate · hold to speak",
+        "notification_idle_no_voice" to "Tap to translate",
         "notification_listening" to "Listening…",
         "listening_speak_now" to "Listening… speak now",
         "listening_elapsed" to "Listening… %ds",
@@ -55,12 +56,14 @@ object OverlayStrings {
         "enable_accessibility" to "⚠️ Enable accessibility service in Settings → Bhasha",
         "allow_microphone" to "Allow the microphone in Bhasha, then hold again",
         "mic_failed" to "✗ Could not start the microphone",
+        "hold_to_speak_disabled" to "Hold to speak is off in Bhasha Settings",
         "bubble_dismissed" to "Floating button dismissed",
         "cancelled" to "Cancelled"
     )
 
     private val KANNADA = mapOf(
         "notification_idle" to "ಅನುವಾದಕ್ಕೆ ಟ್ಯಾಪ್ ಮಾಡಿ · ಮಾತನಾಡಲು ಹಿಡಿದುಕೊಳ್ಳಿ",
+        "notification_idle_no_voice" to "ಅನುವಾದಕ್ಕೆ ಟ್ಯಾಪ್ ಮಾಡಿ",
         "notification_listening" to "ಕೇಳುತ್ತಿದ್ದೇನೆ…",
         "listening_speak_now" to "ಕೇಳುತ್ತಿದ್ದೇನೆ… ಈಗ ಮಾತನಾಡಿ",
         "listening_elapsed" to "ಕೇಳುತ್ತಿದ್ದೇನೆ… %d ಸೆ",
@@ -85,6 +88,7 @@ object OverlayStrings {
         "enable_accessibility" to "⚠️ Settings → Bhasha ನಲ್ಲಿ ಆಕ್ಸೆಸಿಬಿಲಿಟಿ ಸೇವೆಯನ್ನು ಆನ್ ಮಾಡಿ",
         "allow_microphone" to "Bhasha ದಲ್ಲಿ ಮೈಕ್ರೊಫೋನ್‌ಗೆ ಅನುಮತಿ ನೀಡಿ, ನಂತರ ಮತ್ತೆ ಹಿಡಿದುಕೊಳ್ಳಿ",
         "mic_failed" to "✗ ಮೈಕ್ರೊಫೋನ್ ಪ್ರಾರಂಭಿಸಲು ಆಗಲಿಲ್ಲ",
+        "hold_to_speak_disabled" to "Bhasha Settings ನಲ್ಲಿ ಮಾತನಾಡಲು ಹಿಡಿದುಕೊಳ್ಳುವ ಆಯ್ಕೆ ಆಫ್ ಆಗಿದೆ",
         "bubble_dismissed" to "ತೇಲುವ ಗುಂಡಿಯನ್ನು ತೆಗೆದುಹಾಕಲಾಗಿದೆ",
         "cancelled" to "ರದ್ದುಗೊಳಿಸಲಾಗಿದೆ"
     )

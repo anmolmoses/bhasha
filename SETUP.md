@@ -89,7 +89,9 @@ On a double tap, Bhasha first tries to read the visible text straight from the a
 - compresses the frame to an in-memory JPEG;
 - stops MediaProjection immediately;
 - sends the image to Sarvam Vision for OCR and normalized rectangles;
-- sends only the extracted strings to Sarvam Mayura for translation;
+- sends only the extracted strings to Sarvam translation (Mayura for its
+  original language set, Sarvam Translate for Konkani and expanded languages);
+- converts Kannada-to-Konkani results to Kannada script with Sarvam transliteration;
 - draws translated labels through `ScreenTranslationOverlayController`.
 
 The screenshot is not saved by Bhasha. The Sarvam Vision job takes roughly 10–25 seconds. Apps using `FLAG_SECURE` may produce a blank capture and cannot be translated by this mode.
@@ -145,7 +147,7 @@ Sarvam's 22 Indian languages plus English (23 total):
 - **INTERNET**: Sarvam translation, speech, playback, and screen-OCR requests
 - **SYSTEM_ALERT_WINDOW**: the floating bubble overlay
 - **Accessibility service**: read and replace text in the focused field, and read visible text for screen translation; enabled manually in system settings
-- **RECORD_AUDIO**: hold-to-speak (requested on first use)
+- **RECORD_AUDIO**: hold-to-speak (requested only when **Hold to speak** is enabled)
 - **Foreground service**: keeps the bubble available outside Bhasha
 - **FOREGROUND_SERVICE_MEDIA_PROJECTION**: one-shot screen capture after Android's consent prompt, granted per capture
 - **BIND_INPUT_METHOD**: the custom keyboard (optional; scaffolded)

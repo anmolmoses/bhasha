@@ -4,6 +4,7 @@ import '../models/parent_profile.dart';
 import '../services/parent_profile_service.dart';
 import '../services/platform_service.dart';
 import '../services/storage_service.dart';
+import '../services/tts_player.dart';
 import '../theme/app_theme.dart';
 import '../widgets/api_key_input.dart';
 import '../widgets/glass_card.dart';
@@ -36,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _floatingActionType = 'translate';
   ParentProfile _profile = const ParentProfile();
   bool _speakAloud = true;
+  bool _holdToSpeak = true;
 
   @override
   void initState() {
@@ -92,6 +94,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     _autoFlip = _storage.getAutoFlip();
     _floatingActionType = _storage.getFloatingActionType();
     _speakAloud = _storage.getSpeakAloud();
+    _holdToSpeak = _storage.getHoldToSpeakEnabled();
+    await _platform.setHoldToSpeakEnabled(_holdToSpeak);
     _profile = await _profileService.load();
     _apiKey = await _storage.getSarvamApiKey();
 
@@ -611,7 +615,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         children: [
           const SectionHeader(
             headline: 'Your Languages',
-            subtitle: 'Also changeable from the bubble, without leaving an app.',
+            subtitle:
+                'Also changeable from the bubble, without leaving an app.',
           ),
           const SizedBox(height: 18),
           LanguagePicker(
@@ -671,20 +676,33 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           const SizedBox(height: 18),
           _buildSwitchRow(
-            title: 'Speak translations aloud',
-            subtitle: 'Read every bubble result with your chosen voice.',
+            title: 'Hold to speak',
+            subtitle:
+                'Turn your voice into translated text from the floating bubble.',
+            value: _holdToSpeak,
+            onChanged: (value) async {
+              await _storage.saveHoldToSpeakEnabled(value);
+              await _platform.setHoldToSpeakEnabled(value);
+              if (mounted) setState(() => _holdToSpeak = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          _buildSwitchRow(
+            title: 'Text to speech',
+            subtitle: 'Read translated text aloud with your chosen voice.',
             value: _speakAloud,
             onChanged: (value) async {
               await _storage.saveSpeakAloud(value);
-              setState(() => _speakAloud = value);
+              if (!value) await TtsPlayer().stop();
+              if (mounted) setState(() => _speakAloud = value);
             },
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue: ParentProfile.selectableSpeakers
-                    .contains(_profile.voiceSpeaker)
-                ? _profile.voiceSpeaker
-                : ParentProfile.defaultSpeaker,
+            initialValue:
+                ParentProfile.selectableSpeakers.contains(_profile.voiceSpeaker)
+                    ? _profile.voiceSpeaker
+                    : ParentProfile.defaultSpeaker,
             decoration: const InputDecoration(
               labelText: 'Voice',
               border: OutlineInputBorder(),
@@ -1072,6 +1090,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               await _storage.clearAll();
               await _platform.setContextualTranslateEnabled(false);
               await _platform.setScreenTranslationEnabled(false);
+              await _platform.setHoldToSpeakEnabled(true);
               if (!mounted || !dialogContext.mounted) return;
               Navigator.pop(dialogContext);
               ScaffoldMessenger.of(context).showSnackBar(

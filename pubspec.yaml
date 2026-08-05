@@ -26,7 +26,7 @@ dependencies:
 
   # Utilities
   provider: ^6.1.1
-  audioplayers: ^6.8.1
+  audioplayers: ^6.7.1
 
 dev_dependencies:
   flutter_test:
