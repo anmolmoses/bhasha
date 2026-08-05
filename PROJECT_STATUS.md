@@ -14,13 +14,14 @@ Bhasha is a Flutter + native Kotlin Android app built on the Sarvam API. Sarvam 
 
 - A draggable floating bubble runs as a foreground service and works over any app.
 - Tap the bubble and the accessibility service reads the focused editable field, sends the text to Sarvam, and replaces it in place — no copying, no app switching.
-- The one-tap action is configurable in Settings: **Translate** (`/translate`, `mayura:v1`) or **Grammar** (`/v1/chat/completions`, `sarvam-105b`).
+- The one-tap action is configurable in Settings: **Translate** (`/translate`, using `mayura:v1` for its original set and `sarvam-translate:v1` for expanded languages) or **Grammar** (`/v1/chat/completions`, `sarvam-105b`).
+- Kannada-to-Konkani translations are post-transliterated through Sarvam `/transliterate`, so the Konkani result uses Kannada script instead of Devanagari.
 - Grammar prompts are shaped by the saved parent profile (tone, approved names) and recent voice turns.
 
 ### Hold-to-speak voice translation
 
 - Press and hold the bubble to record; release to process.
-- Audio goes to `/speech-to-text` (`saaras:v3`); if the speech is not already in the target language, the transcript is translated with Mayura.
+- Audio goes to `/speech-to-text` (`saaras:v3`); if the speech is not already in the target language, the transcript uses Mayura or Sarvam Translate according to the requested language pair.
 - The result is appended to the focused field, so held recordings never destroy typed text.
 - Recording is capped at 28 seconds (Sarvam's REST speech endpoint rejects audio over 30) with a visible countdown.
 - Temporary audio files are deleted as soon as the request finishes, success or failure.

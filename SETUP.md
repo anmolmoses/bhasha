@@ -89,7 +89,9 @@ On a double tap, Bhasha first tries to read the visible text straight from the a
 - compresses the frame to an in-memory JPEG;
 - stops MediaProjection immediately;
 - sends the image to Sarvam Vision for OCR and normalized rectangles;
-- sends only the extracted strings to Sarvam Mayura for translation;
+- sends only the extracted strings to Sarvam translation (Mayura for its
+  original language set, Sarvam Translate for Konkani and expanded languages);
+- converts Kannada-to-Konkani results to Kannada script with Sarvam transliteration;
 - draws translated labels through `ScreenTranslationOverlayController`.
 
 The screenshot is not saved by Bhasha. The Sarvam Vision job takes roughly 10–25 seconds. Apps using `FLAG_SECURE` may produce a blank capture and cannot be translated by this mode.

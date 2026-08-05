@@ -22,7 +22,7 @@ enum SaarasMode {
   String get wire => name;
 }
 
-/// Conversational registers accepted by Mayura's `mode` field.
+/// Translation registers accepted by the `/translate` endpoint.
 enum MayuraMode {
   formal,
   modernColloquial,
@@ -178,12 +178,14 @@ class SarvamService {
   static const String baseUrl = 'https://api.sarvam.ai';
   static const String sttPath = '/speech-to-text';
   static const String translatePath = '/translate';
+  static const String transliteratePath = '/transliterate';
   static const String ttsPath = '/text-to-speech';
   static const String chatPath = '/v1/chat/completions';
   static const String languageIdPath = '/text-lid';
 
   static const String sttModel = 'saaras:v3';
   static const String translateModel = 'mayura:v1';
+  static const String expandedTranslateModel = 'sarvam-translate:v1';
   static const String ttsModel = 'bulbul:v3';
   static const String chatModel = 'sarvam-105b';
 
@@ -193,6 +195,22 @@ class SarvamService {
   static const int maxTtsChars = 2500;
   static const int maxLanguageIdChars = 1000;
   static const Duration maxRestAudioDuration = Duration(seconds: 30);
+
+  /// Mayura is retained for its colloquial output on the original 11-language
+  /// set. Sarvam Translate covers all 22 scheduled Indian languages.
+  static const Set<String> _mayuraLanguageCodes = {
+    'bn-IN',
+    'en-IN',
+    'gu-IN',
+    'hi-IN',
+    'kn-IN',
+    'ml-IN',
+    'mr-IN',
+    'od-IN',
+    'pa-IN',
+    'ta-IN',
+    'te-IN',
+  };
 
   final http.Client _client;
   final Future<String?> Function() _keyProvider;
@@ -248,7 +266,8 @@ class SarvamService {
     return result;
   }
 
-  /// Conversational translation via Mayura.
+  /// Translation through Mayura for its original language set, or Sarvam
+  /// Translate whenever either side needs the expanded 22-language coverage.
   ///
   /// Input longer than [maxTranslateChars] is split on sentence boundaries and
   /// rejoined, because Mayura rejects oversized input outright.
@@ -261,6 +280,14 @@ class SarvamService {
     final trimmed = input.trim();
     if (trimmed.isEmpty) return '';
 
+    final useMayura = (sourceLanguageCode == 'auto' ||
+            _mayuraLanguageCodes.contains(sourceLanguageCode)) &&
+        _mayuraLanguageCodes.contains(targetLanguageCode);
+    final model = useMayura ? translateModel : expandedTranslateModel;
+    // Sarvam Translate currently supports formal mode only. Mayura keeps the
+    // existing product default for conversational Kannada/English pairs.
+    final requestMode = useMayura ? mode.wire : MayuraMode.formal.wire;
+
     final chunks = _splitForLimit(trimmed, maxTranslateChars);
     final out = <String>[];
     for (final chunk in chunks) {
@@ -270,17 +297,53 @@ class SarvamService {
           'input': chunk,
           'source_language_code': sourceLanguageCode,
           'target_language_code': targetLanguageCode,
-          'model': translateModel,
-          'mode': mode.wire,
+          'model': model,
+          'mode': requestMode,
           // Keep 10:30 and Rs 500 readable as digits rather than Kannada
           // numerals, which parents read more slowly.
           'numerals_format': 'international',
         },
         'translate',
       );
-      out.add(TranslationResponse.fromJson(json).translatedText);
+      var translated = TranslationResponse.fromJson(json).translatedText;
+
+      // Sarvam Translate supports Konkani but currently emits it in
+      // Devanagari and does not accept output_script. Parents using the
+      // Kannada -> Konkani pair expect Konkani written in Kannada script, so
+      // preserve the translated pronunciation and convert only its script.
+      if (sourceLanguageCode == 'kn-IN' && targetLanguageCode == 'kok-IN') {
+        translated = await _konkaniInKannadaScript(translated);
+      }
+      out.add(translated);
     }
     return out.join(' ');
+  }
+
+  Future<String> _konkaniInKannadaScript(String devanagariKonkani) async {
+    final json = await _postJson(
+      transliteratePath,
+      {
+        'input': devanagariKonkani,
+        // The transliteration API does not expose kok-IN. The translated text
+        // is Devanagari, so hi-IN identifies its input script while kn-IN
+        // selects Kannada as the output script.
+        'source_language_code': 'hi-IN',
+        'target_language_code': 'kn-IN',
+        'numerals_format': 'international',
+      },
+      'transliterate-konkani-kannada',
+    );
+    final text = json['transliterated_text'];
+    if (text is! String || text.trim().isEmpty) {
+      throw const SarvamException(
+        SarvamErrorKind.malformedResponse,
+        parentMessage:
+            'Bhasha could not write that in Kannada. Please try again.',
+        debugDetail:
+            'transliterate response missing string "transliterated_text"',
+      );
+    }
+    return text.trim();
   }
 
   /// Kannada (or other Indic) speech synthesis via Bulbul.

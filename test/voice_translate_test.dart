@@ -183,8 +183,71 @@ void main() {
         reason: 'no reason to translate Kannada into Kannada');
   });
 
-  test('an unrecognised spoken language falls back to auto rather than a 400',
+  test('Kannada speech reaches Konkani through the expanded translate model',
       () async {
+    SharedPreferences.setMockInitialValues({
+      'source_language': 'Kannada',
+      'target_language': 'Konkani',
+      'auto_flip_language_pair': false,
+    });
+    await StorageService().init();
+
+    late Map<String, dynamic> translateBody;
+    late Map<String, dynamic> transliterateBody;
+    final client = MockClient((request) async {
+      if (request.url.path == SarvamService.sttPath) {
+        return http.Response(
+          jsonEncode({
+            'transcript': 'ನಾನು ನಾಳೆ ಬರುತ್ತೇನೆ',
+            'language_code': 'kn-IN',
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (request.url.path == SarvamService.translatePath) {
+        translateBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'translated_text': 'हांव फाल्यां येतां',
+            'source_language_code': 'kn-IN',
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      transliterateBody = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response(
+        jsonEncode({'transliterated_text': 'ಹಾಂವ್ ಫಾಲ್ಯಾಂ ಯೇತಾಂ'}),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    OverlayRequestHandler().overrideServiceForTesting(
+      SarvamService(client: client, keyProvider: () async => 'test-key'),
+    );
+
+    final result = await holdToSpeak(audioPath: audio.path) as Map;
+
+    expect(result['resultText'], 'ಹಾಂವ್ ಫಾಲ್ಯಾಂ ಯೇತಾಂ');
+    expect(result['sourceLang'], 'kn-IN');
+    expect(result['targetLang'], 'kok-IN');
+    expect(translateBody['model'], 'sarvam-translate:v1');
+    expect(translateBody['mode'], 'formal');
+    expect(transliterateBody['input'], 'हांव फाल्यां येतां');
+    expect(transliterateBody['source_language_code'], 'hi-IN');
+    expect(transliterateBody['target_language_code'], 'kn-IN');
+  });
+
+  test('an unrecognised spoken language falls back to the saved source',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'source_language': 'Kannada',
+      'target_language': 'English',
+      'auto_flip_language_pair': false,
+    });
+    await StorageService().init();
+
     late String sentSource;
     final client = MockClient((request) async {
       if (request.url.path == SarvamService.translatePath) {
@@ -209,7 +272,7 @@ void main() {
 
     await holdToSpeak(audioPath: audio.path);
 
-    expect(sentSource, 'auto');
+    expect(sentSource, 'kn-IN');
   });
 
   test('a released button with no recording fails with a parent-facing message',

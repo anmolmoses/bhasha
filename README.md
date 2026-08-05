@@ -9,6 +9,7 @@ Its primary experience is a draggable, system-wide floating bubble. From another
 ### In the Flutter app
 
 - Translate text between 23 supported languages (Sarvam's 22 Indian languages plus English).
+- Write Kannada-to-Konkani results in Kannada script for local readability.
 - Automatically detect the source language when enabled.
 - Hear translations spoken aloud with Bulbul text-to-speech in the parent's saved voice and pace.
 - Copy translated text to the clipboard.
@@ -159,7 +160,9 @@ Notes:
 Bhasha sends requests directly from the device to the Sarvam API. Sarvam is the only inference provider; there is no fallback. It currently uses:
 
 - `/speech-to-text` (`saaras:v3`) for hold-to-speak transcription
-- `/translate` (`mayura:v1`) for translation
+- `/translate` (`mayura:v1` for its 11-language colloquial set;
+  `sarvam-translate:v1` for Konkani and the expanded 22-language set)
+- `/transliterate` for Kannada-script Konkani when translating from Kannada
 - `/text-lid` for source-language detection
 - `/v1/chat/completions` (`sarvam-105b`) for grammar correction
 - `/text-to-speech` (`bulbul:v3`) for spoken playback of results

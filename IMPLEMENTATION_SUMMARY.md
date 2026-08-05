@@ -34,7 +34,9 @@ Bhasha is an Android app built with Flutter and native Kotlin that helps users t
 **File**: `lib/services/sarvam_service.dart`
 
 - `/speech-to-text` (`saaras:v3`) for hold-to-speak transcription
-- `/translate` (`mayura:v1`) for translation
+- `/translate` (`mayura:v1` for its original set and
+  `sarvam-translate:v1` for Konkani and expanded languages)
+- `/transliterate` for Kannada-script Konkani output from Kannada input
 - `/text-lid` for source-language detection
 - `/v1/chat/completions` (`sarvam-105b`) for grammar correction and rewriting
 - `/text-to-speech` (`bulbul:v3`) for spoken playback of results
@@ -175,7 +177,7 @@ Sarvam API usage is billed to the account associated with the key. Monitor usage
 ## Credits
 
 - **Flutter**: Google's UI toolkit
-- **Sarvam AI**: Saaras (speech-to-text), Mayura (translation), Bulbul (text-to-speech), and sarvam-105b (chat) models
+- **Sarvam AI**: Saaras (speech-to-text), Mayura plus Sarvam Translate (text translation), Bulbul (text-to-speech), and sarvam-105b (chat) models
 - **Material Design**: Google's design system
 
 ## License
