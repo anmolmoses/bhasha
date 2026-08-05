@@ -145,7 +145,7 @@ Sarvam's 22 Indian languages plus English (23 total):
 - **INTERNET**: Sarvam translation, speech, playback, and screen-OCR requests
 - **SYSTEM_ALERT_WINDOW**: the floating bubble overlay
 - **Accessibility service**: read and replace text in the focused field, and read visible text for screen translation; enabled manually in system settings
-- **RECORD_AUDIO**: hold-to-speak (requested on first use)
+- **RECORD_AUDIO**: hold-to-speak (requested only when **Hold to speak** is enabled)
 - **Foreground service**: keeps the bubble available outside Bhasha
 - **FOREGROUND_SERVICE_MEDIA_PROJECTION**: one-shot screen capture after Android's consent prompt, granted per capture
 - **BIND_INPUT_METHOD**: the custom keyboard (optional; scaffolded)

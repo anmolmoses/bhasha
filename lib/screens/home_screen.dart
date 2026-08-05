@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isLoading = false;
   bool _isSettingUp = false;
   bool _isSpeaking = false;
+  bool _textToSpeechEnabled = true;
 
   // One-Tap Status
   bool _overlayPermissionGranted = false;
@@ -62,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadSettings() async {
     _sourceLang = _storage.getSourceLanguage();
     _targetLang = _storage.getTargetLanguage();
+    _textToSpeechEnabled = _storage.getSpeakAloud();
     if (mounted) {
       setState(() {});
     }
@@ -117,7 +119,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Step 3: Ask for the microphone, used by hold-to-speak.
       // Deliberately not a gate: tap-to-translate works without it, so a parent
       // who declines still gets a working bubble.
-      if (!await _platform.checkMicPermission()) {
+      if (_storage.getHoldToSpeakEnabled() &&
+          !await _platform.checkMicPermission()) {
         await _platform.requestMicPermission();
       }
 
@@ -195,6 +198,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// English message pasted in can be *heard* in Kannada, not just read.
   Future<void> _speakResult() async {
     if (_result.isEmpty) return;
+    if (!_storage.getSpeakAloud()) return;
     if (_isSpeaking) {
       await TtsPlayer().stop();
       if (mounted) setState(() => _isSpeaking = false);
@@ -595,14 +599,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
               IconButton(
-                onPressed: _speakResult,
+                onPressed: _textToSpeechEnabled ? _speakResult : null,
                 icon: Icon(
                   _isSpeaking
                       ? Icons.stop_circle_outlined
                       : Icons.volume_up_rounded,
-                  color: Colors.white,
+                  color: _textToSpeechEnabled
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.45),
                 ),
-                tooltip: _isSpeaking ? 'Stop' : 'Listen',
+                tooltip: _textToSpeechEnabled
+                    ? (_isSpeaking ? 'Stop' : 'Listen')
+                    : 'Text to speech is off in Settings',
               ),
               IconButton(
                 onPressed: _copyToClipboard,

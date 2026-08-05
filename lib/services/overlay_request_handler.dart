@@ -87,6 +87,14 @@ class OverlayRequestHandler {
     }
 
     await _adoptOverlayLanguageChoice(arguments);
+    if (action == 'voice_translate' && !_storage.getHoldToSpeakEnabled()) {
+      throw PlatformException(
+        code: 'feature_disabled',
+        message: ParentStrings.localize(
+          'Hold to speak is turned off in Bhasha Settings.',
+        ),
+      );
+    }
     await _ensureApiKey();
 
     try {
@@ -209,16 +217,14 @@ class OverlayRequestHandler {
             '$targetName is not supported. Pick another language in Settings.',
       );
     }
-    final sourceCode =
-        Languages.codeFor(_storage.getSourceLanguage()) ??
+    final sourceCode = Languages.codeFor(_storage.getSourceLanguage()) ??
         Languages.defaultSourceCode;
 
     return LanguagePair(
       sourceCode: sourceCode,
       targetCode: targetCode,
       // A pair of one language has no other side to flip to.
-      autoFlip:
-          _storage.getAutoFlip() &&
+      autoFlip: _storage.getAutoFlip() &&
           !Languages.sameLanguage(sourceCode, targetCode),
     );
   }
@@ -244,9 +250,8 @@ class OverlayRequestHandler {
 
     // Auto-flip has to know what it is looking at, so it detects even when the
     // parent left auto-detect off.
-    final detected = (pair.autoFlip || autoDetect)
-        ? await _detectLanguage(text)
-        : null;
+    final detected =
+        (pair.autoFlip || autoDetect) ? await _detectLanguage(text) : null;
 
     final sourceCode =
         detected ?? Languages.codeFor(_storage.getSourceLanguage());

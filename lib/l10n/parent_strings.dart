@@ -68,6 +68,8 @@ class ParentStrings {
         'ಮೊದಲು ಪಠ್ಯ ಇರುವ ಕ್ಷೇತ್ರದಲ್ಲಿ ಟ್ಯಾಪ್ ಮಾಡಿ.',
     'No recording was captured. Hold the button and speak.':
         'ಧ್ವನಿ ದಾಖಲಾಗಲಿಲ್ಲ. ಗುಂಡಿ ಹಿಡಿದು ಮಾತನಾಡಿ.',
+    'Hold to speak is turned off in Bhasha Settings.':
+        'Bhasha Settings ನಲ್ಲಿ ಮಾತನಾಡಲು ಹಿಡಿದುಕೊಳ್ಳುವ ಆಯ್ಕೆಯನ್ನು ಆಫ್ ಮಾಡಲಾಗಿದೆ.',
     'Add your Sarvam API key in Bhasha settings before using the bubble.':
         'ಬಬಲ್ ಬಳಸುವ ಮೊದಲು Bhasha settings ನಲ್ಲಿ ನಿಮ್ಮ Sarvam API ಕೀ ಸೇರಿಸಿ.',
   };

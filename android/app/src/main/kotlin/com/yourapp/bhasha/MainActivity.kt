@@ -50,6 +50,7 @@ class MainActivity : FlutterActivity() {
         if (intent?.getBooleanExtra(EXTRA_REQUEST_MIC_PERMISSION, false) != true) return
         // Consume it, so rotating the screen does not re-prompt.
         intent.removeExtra(EXTRA_REQUEST_MIC_PERMISSION)
+        if (!BhashaChannel.isHoldToSpeakEnabled()) return
 
         val granted = ContextCompat.checkSelfPermission(
             this,

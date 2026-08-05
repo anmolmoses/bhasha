@@ -93,6 +93,7 @@ Bhasha checks the key with Sarvam when you save it, so a typo is caught immediat
 
 **Speaking instead of typing**:
 
+- In **Bhasha → Settings → Voice & Memory**, keep **Hold to speak** turned on. It is on by default.
 - Press and hold the bubble instead of tapping it
 - It turns red and shows "Listening…"
 - Speak in any supported language — you do not have to tell Bhasha which one
@@ -101,6 +102,10 @@ Bhasha checks the key with Sarvam when you save it, so a typo is caught immediat
 - Whatever you had already typed stays; the spoken part is added to the end
 
 The first time you hold the button, Android asks for microphone permission. Bhasha opens itself to show that prompt; grant it, then hold the button again.
+
+Turn **Hold to speak** off in **Settings → Voice & Memory** if you do not want Bhasha to record microphone input or send audio to Sarvam speech-to-text. Tap translation and spoken playback remain available.
+
+Turn **Text to speech** off in the same section to stop Bhasha from sending translated text to Sarvam Bulbul for spoken playback. This also disables the **Listen** button on the in-app translation result; text translation and hold-to-speak input remain available.
 
 If your language is Kannada, Bhasha's messages — the status pill, notices, and errors — appear in Kannada.
 

@@ -138,6 +138,34 @@ void main() {
     expect(spokenAloud, isEmpty);
   });
 
+  test('turning hold to speak off blocks speech-to-text requests', () async {
+    SharedPreferences.setMockInitialValues({
+      'target_language': 'Kannada',
+      'hold_to_speak_enabled': false,
+    });
+    await StorageService().init();
+
+    final paths = <String>[];
+    OverlayRequestHandler().overrideServiceForTesting(sarvamReturning(
+      transcript: 'unused',
+      detectedLanguage: 'en-IN',
+      paths: paths,
+    ));
+
+    await expectLater(
+      holdToSpeak(audioPath: audio.path),
+      throwsA(isA<PlatformException>()
+          .having((e) => e.code, 'code', 'feature_disabled')
+          .having(
+            (e) => e.message,
+            'message',
+            ParentStrings
+                .kannada['Hold to speak is turned off in Bhasha Settings.'],
+          )),
+    );
+    expect(paths, isEmpty, reason: 'disabled speech never reaches Sarvam');
+  });
+
   test('speech already in the target language skips the translate round trip',
       () async {
     final paths = <String>[];
@@ -200,8 +228,8 @@ void main() {
           .having(
             (e) => e.message,
             'message',
-            ParentStrings
-                .kannada['No recording was captured. Hold the button and speak.'],
+            ParentStrings.kannada[
+                'No recording was captured. Hold the button and speak.'],
           )),
     );
   });

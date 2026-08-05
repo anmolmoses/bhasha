@@ -37,6 +37,7 @@ object BhashaChannel {
     private const val LANGUAGE_SOURCE = "language_source"
     private const val LANGUAGE_TARGET = "language_target"
     private const val LANGUAGE_AUTO_FLIP = "language_auto_flip"
+    private const val HOLD_TO_SPEAK_ENABLED = "hold_to_speak_enabled"
 
 
     const val CHANNEL = "com.yourapp.bhasha/native"
@@ -183,6 +184,17 @@ object BhashaChannel {
         return true
     }
 
+    /** Native source of truth while the Dart UI is not in the foreground. */
+    fun isHoldToSpeakEnabled(): Boolean =
+        prefs()?.getBoolean(HOLD_TO_SPEAK_ENABLED, true) ?: true
+
+    private fun setHoldToSpeakEnabled(enabled: Boolean): Boolean {
+        prefs()?.edit()?.putBoolean(HOLD_TO_SPEAK_ENABLED, enabled)?.apply()
+            ?: return false
+        OverlayService.updateHoldToSpeakEnabled(enabled)
+        return true
+    }
+
     // -----------------------------------------------------------------------
     // Language pair, owned by the bubble while the parent is in another app
     // -----------------------------------------------------------------------
@@ -301,6 +313,11 @@ object BhashaChannel {
                 requestMicPermission()
                 result.success(null)
             }
+            "setHoldToSpeakEnabled" -> result.success(
+                setHoldToSpeakEnabled(
+                    call.argument<Boolean>("enabled") ?: true
+                )
+            )
             "checkAccessibilityPermission" -> result.success(isAccessibilityEnabled())
             "requestAccessibilityPermission" -> {
                 launchSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS)
@@ -344,6 +361,7 @@ object BhashaChannel {
      * the app forward and let it ask on resume, rather than failing silently.
      */
     private fun requestMicPermission() {
+        if (!isHoldToSpeakEnabled()) return
         if (hasMicPermission()) return
         val host = activity
         if (host != null) {

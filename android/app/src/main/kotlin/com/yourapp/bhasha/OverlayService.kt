@@ -76,6 +76,13 @@ class OverlayService : Service() {
             instance?.mainHandler?.post { instance?.updateLanguageChip() }
         }
 
+        /** Applies a Settings change without restarting the running bubble. */
+        fun updateHoldToSpeakEnabled(enabled: Boolean) {
+            instance?.mainHandler?.post {
+                instance?.applyHoldToSpeakEnabled(enabled)
+            }
+        }
+
         /** Confirms a pick made from the panel, over the app they are in. */
         fun announceLanguage() {
             val service = instance ?: return
@@ -159,7 +166,12 @@ class OverlayService : Service() {
      * permission prompt.
      */
     private fun startAsOverlayService() {
-        val notification = createNotification(str("notification_idle"))
+        val notificationKey = if (BhashaChannel.isHoldToSpeakEnabled()) {
+            "notification_idle"
+        } else {
+            "notification_idle_no_voice"
+        }
+        val notification = createNotification(str(notificationKey))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIFICATION_ID,
@@ -486,7 +498,15 @@ class OverlayService : Service() {
 
     private fun scheduleHold() {
         cancelHold()
-        val runnable = Runnable { beginVoiceCapture() }
+        val runnable = Runnable {
+            if (BhashaChannel.isHoldToSpeakEnabled()) {
+                beginVoiceCapture()
+            } else {
+                holdRunnable = null
+                gestureConsumed = true
+                showToast(str("hold_to_speak_disabled"))
+            }
+        }
         holdRunnable = runnable
         mainHandler.postDelayed(runnable, HOLD_THRESHOLD_MS)
     }
@@ -506,6 +526,12 @@ class OverlayService : Service() {
     private fun beginVoiceCapture() {
         holdRunnable = null
         hideUndo()
+
+        if (!BhashaChannel.isHoldToSpeakEnabled()) {
+            gestureConsumed = true
+            showToast(str("hold_to_speak_disabled"))
+            return
+        }
 
         if (BhashaAccessibilityService.getInstance() == null) {
             gestureConsumed = true
@@ -613,6 +639,17 @@ class OverlayService : Service() {
         restoreIdleButton()
         hideStatus()
         showToast(reason)
+    }
+
+    private fun applyHoldToSpeakEnabled(enabled: Boolean) {
+        if (!enabled) {
+            cancelHold()
+            if (voiceCapture.isRecording) {
+                abortVoiceCapture(str("hold_to_speak_disabled"))
+                return
+            }
+        }
+        startAsOverlayService()
     }
 
     private fun restoreIdleButton() {
